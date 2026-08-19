@@ -1,0 +1,27 @@
+option "title" "Sample Ledger"
+option "operating_currency" "USD"
+
+include "accounts.bean"
+include "commodities.bean"
+
+2024-01-01 * "Opening balance"
+  Assets:Cash         1000.00 USD
+  Equity:Opening-Balances
+
+2024-01-15 * "Salary for January" "ACME Corp"
+  Assets:Bank:Checking  2500.00 USD
+  Income:Salary
+
+2024-02-01 * "Buy AAPL stock"
+  Assets:Broker     10 AAPL {180.00 USD}
+  Assets:Bank:Checking
+
+2024-02-15 price AAPL 185.00 USD
+
+2024-03-05 * "Groceries"
+  Expenses:Food       120.45 USD
+  Assets:Bank:Checking
+
+2024-03-20 * "Rent"
+  Expenses:Home  900.00 USD
+  Assets:Bank:Checking

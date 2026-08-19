@@ -1,7 +1,26 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "ledger"
 version = "0.1.0"
-description = "Add your description here"
+description = "Python utilities for querying and editing Beancount v3 ledgers."
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "beancount>=3.2.3",
+    "beanquery>=0.1",
+    "pydantic>=2.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ledger"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
