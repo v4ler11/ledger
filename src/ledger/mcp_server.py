@@ -16,7 +16,7 @@ from mcp.server import MCPServer
 from .accounts import add_account, format_account
 from .transactions import add_transaction, format_transaction
 from .receipts import Receipt, ReceiptItem, add_receipt
-from .queries import list_accounts
+from .queries import list_accounts, list_balances
 from .ledger import LedgerManager
 
 
@@ -57,6 +57,30 @@ async def handle_list_accounts(args: dict) -> MCPToolResult:
     return _ok(
         "\n".join(result.accounts) or "(no accounts declared)",
         {"accounts": result.accounts, "count": result.count},
+    )
+
+
+async def handle_list_balances(args: dict) -> MCPToolResult:
+    try:
+        manager = LedgerManager(LEDGER_PATH)
+        errors = manager.connection_errors()
+        if errors:
+            return _ok(
+                "Ledger has loader errors; fix them before listing balances.",
+                {"balances": {}, "count": 0, "errors": errors},
+                isError=True,
+            )
+        balances = list_balances(manager)
+    except Exception as exc:
+        return _fail("list_balances", exc)
+
+    return _ok(
+        "\n".join(
+            f"{account}  {' | '.join(amounts)}"
+            for account, amounts in balances.items()
+        )
+        or "(no accounts declared)",
+        {"balances": balances, "count": len(balances)},
     )
 
 
@@ -338,7 +362,7 @@ LEDGER_TOOLS: tuple[MCPTool, ...] = (
                         "items": {"type": "string"},
                         "description": "Optional links to related transactions (rendered as ^link).",
                     },
-"meta": {
+                    "meta": {
                         "type": "object",
                         "additionalProperties": {"type": "string"},
                         "description": "Optional transaction-level metadata as Key: Value, e.g. {\"id\": \"seq-1\"}.",
@@ -484,6 +508,24 @@ LEDGER_TOOLS: tuple[MCPTool, ...] = (
                 "transactions to confirm the exact account names — "
                 "every account must be opened before it can be "
                 "posted to."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        ),
+    ),
+    MCPTool(
+        func=handle_list_balances,
+        definition=MCPToolDefinition(
+            name="list_balances",
+            description=(
+                "Total balance per declared account: a dict of "
+                "account -> list of summed amounts, one per currency "
+                "(costed holdings appear as units, e.g. '10 AAPL', "
+                "not converted value). Read-only; call it to see "
+                "where money stands before posting transactions."
             ),
             inputSchema={
                 "type": "object",

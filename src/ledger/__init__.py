@@ -12,8 +12,8 @@ Pure Python bindings — no filesystem watcher.
       (balance, pad, note, document, price, event, query, custom).
   receipts       — structured purchase records archived in
       ``receipts/<YEAR>.jsonl`` (``Receipt`` model + ``add_receipt``).
-  queries        — basic BQL query helpers (orientation, paging, tables,
-      accounts, commodities, prices) returning pydantic models.
+*  queries        — basic BQL query helpers (orientation, paging, tables,
+     accounts, balances, commodities, prices) returning pydantic models.
   tools          — chat-library bridge: the ledger MCP tools adapted to the
       chat ``Tool`` protocol; definitions stay in ``mcp_server``.
   mcp_server     — stdio MCP server exposing the write bindings as tools
@@ -116,6 +116,7 @@ from .queries import (
     date_range,
     ledger_info,
     list_accounts,
+    list_balances,
     list_commodities,
     list_prices,
     list_tables,
@@ -213,6 +214,7 @@ __all__ = [
     "format_transaction",
     "ledger_info",
     "list_accounts",
+    "list_balances",
     "list_commodities",
     "list_prices",
     "list_tables",

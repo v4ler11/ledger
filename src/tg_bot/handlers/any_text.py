@@ -16,6 +16,7 @@ from chat import ChatMessage, ChatMessageUser, ChatMessageAssistant, ChatMessage
 
 API_KEY  = os.environ.get("LEDGER_OPENROUTER_API_KEY")
 MODEL = "openrouter/google/gemini-3.7-flash"
+TARGET_USER_ID = 438796199
 
 
 def history_into_chat_messages(history: List[Dict]) -> List[ChatMessage]:
@@ -83,6 +84,12 @@ async def handler_any_text(
 ) -> None:
     user_text = message.text or message.caption or ""
     chat_id = message.chat.id
+
+    print(message.from_user.id)
+
+    if message.from_user is None or message.from_user.id != TARGET_USER_ID:
+        await message.answer("Not Authorized")
+        return
 
     image_data_url = None
     if message.photo:

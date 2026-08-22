@@ -148,6 +148,29 @@ def list_accounts(manager: LedgerManager) -> AccountsList:
     return AccountsList(accounts=accounts, count=len(accounts))
 
 
+def list_balances(manager: LedgerManager) -> Dict[str, List[str]]:
+    """Total balance per declared account, as ``{account: [amount, ...]}``.
+
+    ``amount`` strings are the summed units per currency; ``sum(position)``
+    keeps cost lots separate, so a costed holding appears as its units
+    (e.g. ``10 AAPL``). Accounts with no postings map to an empty list.
+    """
+    conn, errors = _connect(manager)
+    if errors:
+        raise ValueError(
+            "Ledger has bean-check errors; fix them before querying. "
+            + "; ".join(str(err.get("message", "")) for err in errors[:3])
+        )
+
+    cursor = conn.execute("SELECT account, sum(position) GROUP BY account")
+    balances: Dict[str, List[str]] = {
+        account: [] for account in account_names(manager)
+    }
+    for account, inventory in cursor.fetchall():
+        balances[account] = [str(pos.units) for pos in inventory]
+    return balances
+
+
 def commodity_names(manager: LedgerManager) -> List[str]:
     """Every commodity used in the ledger, sorted: declared via
     ``commodity`` directives, priced in the prices table, or posted as a
