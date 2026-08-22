@@ -9,8 +9,11 @@ description = "Python utilities for querying and editing Beancount v3 ledgers."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "aiogram>=3.30.0",
     "beancount>=3.2.3",
     "beanquery>=0.1",
+    "chat",
+    "mcp",
     "pydantic>=2.0.0",
 ]
 
@@ -24,3 +27,10 @@ packages = ["src/ledger"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.uv.sources]
+chat = { git = "ssh://git@ssh.git.valerii.casa/valerii/chat.git" }
+mcp = { git = "ssh://git@ssh.git.valerii.casa/valerii/chat.git", subdirectory = "src/mcp" }
+
+[tool.uv.workspace]
+members = ["src/tg_bot"]

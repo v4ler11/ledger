@@ -1,10 +1,11 @@
 # ledger — Beancount v3 library
 
 Pure Python bindings for working with [Beancount](https://beancount.github.io/)
-v3 ledgers. No server, no transport, no filesystem watcher — this is a
-library you embed in your own programs.
+v3 ledgers — a library you embed in your own programs, plus an optional
+stdio [MCP](https://modelcontextprotocol.io/) server exposing the write
+bindings as tools (see [MCP server](#mcp-server)).
 
-The library has three parts:
+The library has four parts:
 
 - **`LedgerManager`** (`ledger/ledger.py`) — a cached
   [beanquery](https://github.com/beancount/beanquery) connection with
@@ -17,6 +18,12 @@ The library has three parts:
 - **Query helpers** (`ledger/queries.py`) — basic BQL helpers that
   return [pydantic](https://docs.pydantic.dev/) models: orientation,
   paged `run_query`, tables, accounts, commodities, and prices.
+- **MCP server** (`ledger/mcp_server.py`) — a stdio JSON-RPC server that
+  exposes the write and read bindings to an MCP client; `add_transaction`
+  and `list_accounts`.
+- **Chat bridge** (`ledger/tools.py`) — adapts the same tools to the
+  `chat` library's `Tool` protocol, so one set of definitions drives both
+  MCP and an OpenAI-style chat loop (see [Chat bridge](#chat-bridge)).
 
 A runnable example ledger and a playground script live in
 [`examples/`](examples/main.bean).
@@ -29,6 +36,84 @@ uv sync            # or: pip install -e .
 
 Requires Python ≥ 3.13. Dependencies: `beancount>=3.2.3` and
 `beanquery>=0.1`.
+
+## MCP server
+
+`ledger/mcp_server.py` is an MCP server speaking JSON-RPC 2.0 over stdio: it
+reads one request per line on stdin and answers on stdout, so any MCP
+client can launch it as a subprocess. Run it with the project's venv:
+
+```sh
+/Users/valerii/code/ledger/.venv/bin/python -m ledger.mcp_server
+```
+
+or from anywhere inside the repo:
+
+```sh
+uv run python -m ledger.mcp_server
+```
+
+Register that command with an MCP client (editor, Claude Desktop, `mcp`
+CLI, …) as a *stdio* server — no ports, no daemon. Verify it end-to-end
+without a client:
+
+```sh
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
+  | /Users/valerii/code/ledger/.venv/bin/python -m ledger.mcp_server
+# {"jsonrpc": "2.0", "id": 1, "result": {"tools": [{"name": "add_transaction", ...}, {"name": "list_accounts", ...}]}}
+```
+
+Execute `add_transaction` the same way — one JSON-RPC request per line:
+
+```sh
+echo '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"add_transaction","arguments":{"date":"2026-08-19","narration":"Top up Wise","payee":"Mono","postings":[{"account":"Assets:Mono:EUR","number":"-150.00","currency":"EUR"},{"account":"Assets:Wise:EUR","elided":true}]}}}' \
+  | /Users/valerii/code/ledger/.venv/bin/python -m ledger.mcp_server
+```
+
+The result echoes the rendered directive and, in `structuredContent`,
+the posted accounts plus `errors: []` when the ledger stayed clean. A
+transaction is routed to the matching yearly file under the root
+(`ledgers/<YEAR>.bean`) and auto-tagged `#agent`.
+
+The registered tools:
+
+- **`add_transaction`** — append a validated Beancount transaction to the
+  ledger. Staged and validated before anything writes; on error the
+  ledger is untouched and errors are returned. Postings use flat
+  `cost_*`/`price_*` keys and `elided: true` for the auto-balancing
+  leg — examples are in the tool's description.
+- **`list_accounts`** — list every account declared in the ledger,
+  sorted. Read-only. Use it to confirm exact account names before
+  posting. Fails closed: a ledger with loader errors returns them
+  instead of a partial list.
+
+Neither tool takes a path — both operate on the canonical ledger,
+hardcoded as `LEDGER_PATH` in `src/ledger/mcp_server.py`:
+
+```python
+LEDGER_PATH = Path("/Users/valerii/code/finances/main.bean")
+```
+
+Point that constant at your ledger to change it.
+
+## Chat bridge
+
+The same tools are available to chat loops: `ledger.tools` adapts the
+MCP definitions and handlers from `ledger/mcp_server.py` to the `chat`
+library's `Tool` protocol — names, descriptions, and JSON schemas are
+single-sourced in `mcp_server.py`, so the two surfaces never drift apart.
+
+```python
+from ledger import chat_tools
+
+tools = chat_tools()          # [MCPTool('add_transaction'), MCPTool('list_accounts')]
+chat_tool = tools[0].into_chat_tool()   # chat.types.ChatTool for the API call
+```
+
+Feed the `ChatTool`s to a `chat` completion, then run the assistant's
+tool calls with `chat.execute_tools(ctx, tools, messages)` — each
+returns a `ChatMessageTool` with the directive text (or the error
+payload) as content.
 
 ## Your first ledger
 

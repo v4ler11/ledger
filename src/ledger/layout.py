@@ -1,7 +1,8 @@
 """Canonical ledger layout + write-path guard.
 
 The finance ledgers split directives into ``main`` (options+includes),
-``accounts``, ``commodities``, and ``ledgers/<YEAR>`` files.
+``accounts``, ``commodities``, and ``ledgers/<YEAR>`` files; receipts
+(purchase evidence, arbitrary JSON) live in ``receipts/<YEAR>.jsonl``.
 ``resolve_target`` routes a new directive to the right file;
 ``validate_append`` proves an append keeps the ledger clean *before*
 anything is written (and hands back the ``include`` line needed to make
@@ -20,6 +21,7 @@ from .ledger import LedgerError, _format_loader_error
 KIND_ACCOUNT = "account"
 KIND_COMMODITY = "commodity"
 KIND_TRANSACTION = "transaction"
+KIND_RECEIPT = "receipt"
 
 _ACCOUNTS = ("accounts.bean", "accounts.beancount", "accounts")
 _COMMODITIES = ("commodities.bean", "commodities.beancount", "commodities")
@@ -56,6 +58,10 @@ def resolve_target(
             d = base / name
             if d.is_dir():
                 return _year_file(d, date.year)
+    if kind == KIND_RECEIPT:
+        if date is None:
+            raise ValueError("resolve_target: receipts require a date")
+        return base / "receipts" / f"{date.year}.jsonl"
     return root
 
 

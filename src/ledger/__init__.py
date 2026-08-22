@@ -1,6 +1,6 @@
 """Python library for Beancount v3 ledgers.
 
-Pure Python bindings — no server, no filesystem watcher.
+Pure Python bindings — no filesystem watcher.
 
   LedgerManager  — cached beanquery connection with mtime-based staleness
       checks and bean-check. Ledger files are not edited by hand while a
@@ -10,8 +10,14 @@ Pure Python bindings — no server, no filesystem watcher.
   commodities    — add/modify commodity directives.
   directives     — build and append the remaining directive types
       (balance, pad, note, document, price, event, query, custom).
+  receipts       — structured purchase records archived in
+      ``receipts/<YEAR>.jsonl`` (``Receipt`` model + ``add_receipt``).
   queries        — basic BQL query helpers (orientation, paging, tables,
       accounts, commodities, prices) returning pydantic models.
+  tools          — chat-library bridge: the ledger MCP tools adapted to the
+      chat ``Tool`` protocol; definitions stay in ``mcp_server``.
+  mcp_server     — stdio MCP server exposing the write bindings as tools
+      (imported lazily; run with ``python -m ledger.mcp_server``).
 """
 
 from .ledger import (
@@ -27,6 +33,8 @@ from . import (
     commodities,
     accounts,
     directives,
+    receipts,
+    tools,
 )
 from .models import (
     AccountsList,
@@ -60,10 +68,13 @@ from .transactions import (
     PostingSpec,
     add_transaction,
     append_transactions,
+    elided,
     format_transaction,
+    leg,
     make_posting,
     make_transaction,
 )
+from .receipts import Receipt, ReceiptItem, add_receipt
 from .directives import (
     add_balance,
     add_custom,
@@ -111,6 +122,35 @@ from .queries import (
     run_query,
     table_names,
 )
+from .tools import (
+    MCPTool,
+    chat_tools,
+    mcp_tool_to_chat_tool,
+)
+# ``ledger.mcp_server`` is imported lazily below: importing it at package
+# import time makes runpy warn about ``python -m ledger.mcp_server`` ("found
+# in sys.modules ... prior to execution ...").
+
+_SERVER_NAMES = frozenset(
+    {
+        "mcp_server",
+        "create_server",
+        "handle_add_transaction",
+        "handle_list_accounts",
+        "run_stdio",
+    }
+)
+
+
+def __getattr__(name: str):
+    if name in _SERVER_NAMES:
+        import importlib
+
+        server = importlib.import_module(".mcp_server", __name__)
+        if name == "mcp_server":
+            return server
+        return getattr(server, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 __all__ = [
     "FileState",
@@ -127,7 +167,10 @@ __all__ = [
     "LedgerIssue",
     "Price",
     "PricesList",
+    "QueriesResult",
     "QueryResult",
+    "Receipt",
+    "ReceiptItem",
     "TablesList",
     "account_names",
     "add_account",
@@ -140,6 +183,7 @@ __all__ = [
     "add_pad",
     "add_price",
     "add_query",
+    "add_receipt",
     "add_transaction",
     "append_accounts",
     "append_balances",
@@ -185,11 +229,22 @@ __all__ = [
     "make_price",
     "make_query",
     "make_transaction",
+    "elided",
+    "leg",
     "models",
     "queries",
     "run_query",
     "table_names",
     "transactions",
     "directives",
+    "mcp_server",
+    "tools",
+    "MCPTool",
+    "chat_tools",
+    "mcp_tool_to_chat_tool",
+    "create_server",
+    "handle_add_transaction",
+    "handle_list_accounts",
+    "run_stdio",
     "_format_loader_error",
 ]
