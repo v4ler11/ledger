@@ -20,8 +20,9 @@ from .layout import KIND_RECEIPT, resolve_target
 
 class ReceiptItem(BaseModel):
     name: str = Field(..., description="Verbatim OCR string, never modified.")
-    name_inf: Optional[str] = Field(default=None, description="Guess at the real product name, may be wrong.")
+    name_inf: Optional[str] = Field(default=None, description="Inferred human-readable product name, english")
     qty: float = 1.0
+    unit: str = Field(default="pcs", description="For qty: pcs, kg, lt, etc.")
     amount: float = Field(..., description="Total price")
 
 
