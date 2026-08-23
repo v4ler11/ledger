@@ -12,6 +12,8 @@ Pure Python bindings — no filesystem watcher.
       (balance, pad, note, document, price, event, query, custom).
   receipts       — structured purchase records archived in
       ``receipts/<YEAR>.jsonl`` (``Receipt`` model + ``add_receipt``).
+  recurring     — recurring payment rules in ``recurring.json`` (store
+      CRUD + lazy hourly settlement via ``recurring_check``).
 *  queries        — basic BQL query helpers (orientation, paging, tables,
      accounts, balances, commodities, prices) returning pydantic models.
   tools          — chat-library bridge: the ledger MCP tools adapted to the
@@ -34,6 +36,7 @@ from . import (
     accounts,
     directives,
     receipts,
+    recurring,
     tools,
 )
 from .models import (
@@ -239,6 +242,7 @@ __all__ = [
     "table_names",
     "transactions",
     "directives",
+    "recurring",
     "mcp_server",
     "tools",
     "MCPTool",

@@ -1,6 +1,8 @@
 import asyncio
+import functools
 import json
 import sys
+import time as _clock
 from datetime import date
 from pathlib import Path
 
@@ -18,9 +20,54 @@ from .transactions import add_transaction, format_transaction
 from .receipts import Receipt, ReceiptItem, add_receipt
 from .queries import list_accounts, list_balances
 from .ledger import LedgerManager
+from .recurring import (
+    RecurringRule,
+    add_rule,
+    delete_rule,
+    format_rule,
+    list_rules,
+    recurring_check,
+    update_rule,
+)
 
 
 LEDGER_PATH = Path("/Users/valerii/code/finances/main.bean")
+
+
+def _middleware() -> None:
+    """Run the recurring-check middleware before a tool executes.
+
+    Recurs immediately (via the hourly throttle in ``recurring_check``)
+    when nothing is due. Settlements or errors are reported on stderr —
+    never stdout, which carries the JSON-RPC protocol.
+    """
+    try:
+        outcomes = recurring_check(LEDGER_PATH)
+    except Exception as exc:
+        sys.stderr.write(f"recurring check failed: {exc}\n")
+        return
+    for outcome in outcomes:
+        if outcome.get("ok"):
+            sys.stderr.write(
+                f"recurring: settled {outcome['id']} on {outcome['date']}\n"
+            )
+        else:
+            for err in outcome["errors"]:
+                sys.stderr.write(
+                    f"recurring: {outcome['id']} not settled: "
+                    f"{err.get('message') or err}\n"
+                )
+
+
+def with_middleware(fn):
+    """Decorate a tool handler to run the recurring-check middleware first."""
+
+    @functools.wraps(fn)
+    async def wrapper(*args, **kwargs):
+        _middleware()
+        return await fn(*args, **kwargs)
+
+    return wrapper
 
 
 def _ok(text: str, structured: dict | None = None, isError: bool = False) -> MCPToolResult:
@@ -223,6 +270,84 @@ async def handle_add_receipt(args: dict) -> MCPToolResult:
     )
 
 
+async def handle_recurring_list(args: dict) -> MCPToolResult:
+    try:
+        rules = list_rules(LEDGER_PATH)
+    except Exception as exc:
+        return _fail("list_recurring", exc)
+
+    def view(rule: RecurringRule) -> dict:
+        return {
+            "id": rule.id,
+            "payee": rule.payee,
+            "narration": rule.narration,
+            "account_from": rule.account_from,
+            "account_to": rule.account_to,
+            "amount": rule.amount,
+            "currency": rule.currency,
+            "rrule": rule.rrule,
+            "next_settle_date": rule.next_settle_date.isoformat(),
+            "status": rule.status,
+        }
+
+    return _ok(
+        "\n".join(format_rule(r) for r in rules) or "(no recurring rules)",
+        {"rules": [view(r) for r in rules], "count": len(rules)},
+    )
+
+
+async def handle_recurring_add(args: dict) -> MCPToolResult:
+    try:
+        rule = add_rule(
+            LEDGER_PATH,
+            RecurringRule(
+                id=args["id"],
+                payee=args["payee"],
+                narration=args.get("narration", ""),
+                account_from=args["account_from"],
+                account_to=args["account_to"],
+                amount=args["amount"],
+                currency=args["currency"],
+                rrule=args["rrule"],
+                next_settle_date=date.fromisoformat(args["next_settle_date"]),
+                status=args.get("status", "active"),
+            ),
+        )
+    except Exception as exc:
+        return _fail("add_recurring", exc)
+    return _ok(
+        f"Added recurring rule {rule.id}: {format_rule(rule)}",
+        {"id": rule.id, "next_settle_date": rule.next_settle_date.isoformat()},
+    )
+
+
+async def handle_recurring_update(args: dict) -> MCPToolResult:
+    changes = dict(args.get("changes") or {})
+    if "next_settle_date" in changes:
+        changes["next_settle_date"] = date.fromisoformat(changes["next_settle_date"])
+    if "amount" in changes:
+        changes["amount"] = float(changes["amount"])
+    try:
+        rule = update_rule(LEDGER_PATH, args["id"], **changes)
+    except Exception as exc:
+        return _fail("update_recurring", exc)
+    return _ok(
+        f"Updated recurring rule {rule.id}: {format_rule(rule)}",
+        {"id": rule.id, "next_settle_date": rule.next_settle_date.isoformat()},
+    )
+
+
+async def handle_recurring_delete(args: dict) -> MCPToolResult:
+    try:
+        removed = delete_rule(LEDGER_PATH, args["id"])
+    except Exception as exc:
+        return _fail("delete_recurring", exc)
+    return _ok(
+        f"Deleted recurring rule {removed.id}",
+        {"id": removed.id},
+    )
+
+
 add_account_description = """Open a new account in the ledger. Staged and validated before anything writes; on error nothing is written and errors are returned.
 
 The directive is appended to the accounts split file (accounts.bean). Use a full Beancount account name (Root:Part, e.g. \"Assets:Brokerage:Vanguard\"). Call this before posting to a new account — posting to an unopened account fails validation.
@@ -288,9 +413,75 @@ when there's a discount record/ position for an item -- merge them.
 Use for purchase evidence: amount, merchant, item lines, and each line's unit (pcs, kg, lt). Capture what the receipt itself shows; keep item names short and store names consistent so receipts group by store."""
 
 
+recurring_rule_schema = {
+    "type": "object",
+    "properties": {
+        "id": {
+            "type": "string",
+            "description": "Stable identifier for this rule, e.g. 'kagi-search'. Stored as the transaction meta recurring-id when settled.",
+        },
+        "payee": {
+            "type": "string",
+            "description": "Counterparty/merchant name, e.g. 'Kagi'.",
+        },
+        "narration": {
+            "type": "string",
+            "description": "Transaction narration, e.g. 'Monthly search subscription'. Defaults to payee when omitted.",
+        },
+        "account_from": {
+            "type": "string",
+            "description": "Funding/source account, e.g. 'Assets:Wise:USD'. This is the elided balancing leg when settled.",
+        },
+        "account_to": {
+            "type": "string",
+            "description": "Expense/income account, e.g. 'Expenses:Software'.",
+        },
+        "amount": {
+            "type": "number",
+            "description": "Amount moved each period, e.g. 12.3.",
+        },
+        "currency": {
+            "type": "string",
+            "description": "Currency code, e.g. 'EUR', 'USD'.",
+        },
+        "rrule": {
+            "type": "string",
+            "description": "RFC5545 recurrence, e.g. 'FREQ=MONTHLY;BYMONTHDAY=5'.",
+        },
+        "next_settle_date": {
+            "type": "string",
+            "format": "date",
+            "description": "ISO date the next payment is due (YYYY-MM-DD). Settled lazily when today is past this date.",
+        },
+        "status": {
+            "type": "string",
+            "enum": ["active", "paused"],
+            "description": "Settlement state; paused rules are kept but not settled. Defaults to 'active'.",
+        },
+    },
+    "required": [
+        "id", "payee", "account_from", "account_to",
+        "amount", "currency", "rrule", "next_settle_date",
+    ],
+    "additionalProperties": False,
+}
+
+
+list_recurring_description = """List every recurring payment rule sorted by id. Read-only; confirms scheduled rules and their next settle dates before editing or awaiting settlement."""
+
+
+add_recurring_description = """Add a recurring payment rule to recurring.json (next to the ledger, beside accounts.bean). The rule is settled lazily on its next_settle_date, advancing to the next rrule occurrence after each payment. The id must be unique; an existing id is rejected. The rule is written only after the ledger validates it, and on error nothing is written."""
+
+
+update_recurring_description = """Update fields of an existing recurring rule. Pass a changes object with the subset of fields to change (status, amount, currency, rrule, next_settle_date, payee, narration, account_from, account_to). next_settle_date is parsed as a date and amount as a number. Fails if the id does not exist."""
+
+
+delete_recurring_description = """Delete a recurring payment rule by id. Fails if the id does not exist."""
+
+
 LEDGER_TOOLS: tuple[MCPTool, ...] = (
     MCPTool(
-        func=handle_add_account,
+        func=with_middleware(handle_add_account),
         definition=MCPToolDefinition(
             name="add_account",
             description=add_account_description,
@@ -330,7 +521,7 @@ LEDGER_TOOLS: tuple[MCPTool, ...] = (
         ),
     ),
     MCPTool(
-        func=handle_add_transaction,
+        func=with_middleware(handle_add_transaction),
         definition=MCPToolDefinition(
             name="add_transaction",
             description=add_transaction_description,
@@ -444,7 +635,7 @@ LEDGER_TOOLS: tuple[MCPTool, ...] = (
         ),
     ),
     MCPTool(
-        func=handle_add_receipt,
+        func=with_middleware(handle_add_receipt),
         definition=MCPToolDefinition(
             name="add_receipt",
             description=add_receipt_description,
@@ -506,7 +697,83 @@ LEDGER_TOOLS: tuple[MCPTool, ...] = (
         ),
     ),
     MCPTool(
-        func=handle_list_accounts,
+        func=with_middleware(handle_recurring_list),
+        definition=MCPToolDefinition(
+            name="list_recurring",
+            description=list_recurring_description,
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        ),
+    ),
+    MCPTool(
+        func=with_middleware(handle_recurring_add),
+        definition=MCPToolDefinition(
+            name="add_recurring",
+            description=add_recurring_description,
+            inputSchema={
+                "type": "object",
+                "properties": {**recurring_rule_schema["properties"]},
+                "required": recurring_rule_schema["required"],
+                "additionalProperties": False,
+            },
+        ),
+    ),
+    MCPTool(
+        func=with_middleware(handle_recurring_update),
+        definition=MCPToolDefinition(
+            name="update_recurring",
+            description=update_recurring_description,
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string", "description": "Rule id to update."},
+                    "changes": {
+                        "type": "object",
+                        "properties": {
+                            "payee": {"type": "string"},
+                            "narration": {"type": "string"},
+                            "account_from": {"type": "string"},
+                            "account_to": {"type": "string"},
+                            "amount": {"type": "number"},
+                            "currency": {"type": "string"},
+                            "rrule": {"type": "string"},
+                            "next_settle_date": {
+                                "type": "string",
+                                "format": "date",
+                            },
+                            "status": {
+                                "type": "string",
+                                "enum": ["active", "paused"],
+                            },
+                        },
+                        "additionalProperties": False,
+                    },
+                },
+                "required": ["id", "changes"],
+                "additionalProperties": False,
+            },
+        ),
+    ),
+    MCPTool(
+        func=with_middleware(handle_recurring_delete),
+        definition=MCPToolDefinition(
+            name="delete_recurring",
+            description=delete_recurring_description,
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string", "description": "Rule id to delete."},
+                },
+                "required": ["id"],
+                "additionalProperties": False,
+            },
+        ),
+    ),
+    MCPTool(
+        func=with_middleware(handle_list_accounts),
         definition=MCPToolDefinition(
             name="list_accounts",
             description=(
@@ -524,7 +791,7 @@ LEDGER_TOOLS: tuple[MCPTool, ...] = (
         ),
     ),
     MCPTool(
-        func=handle_list_balances,
+        func=with_middleware(handle_list_balances),
         definition=MCPToolDefinition(
             name="list_balances",
             description=(
