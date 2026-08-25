@@ -163,7 +163,14 @@ def process_recurring(
     for rule in list(store.rules.values()):
         if rule.status != "active":
             continue
-        if today <= rule.next_settle_date:
+        # Compare the rule's due day against the end of today (23:59:59),
+        # not its midnight start. A rule due on the calendar day matching
+        # ``today`` must settle *today*; a midnight ``today`` would compare
+        # ``equal`` and skip it, so a rule landing on e.g. the 31st would
+        # perpetually be seen as not-yet-due and lag a day.
+        if datetime.combine(rule.next_settle_date, time.min) > datetime.combine(
+            today, time.max
+        ):
             continue
         errors = _settle(ledger, rule)
         if errors:
