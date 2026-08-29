@@ -22,6 +22,16 @@ set -eu
 : "${SSH_KNOWN_HOSTS:=/root/.ssh/known_hosts}"
 : "${PULL_INTERVAL:=300}"
 
+# OpenSSH refuses private keys with loose permissions ("UNPROTECTED PRIVATE
+# KEY FILE"), and a read-only bind mount can't be chmod'd in place. Copy the
+# key to a writable path with safe perms before first ssh use.
+if [ -f "$SSH_KEY_PATH" ]; then
+  ssh_key_copy="${SSH_KEY_PATH}.copy"
+  mkdir -p "$(dirname "$ssh_key_copy")"
+  install -m 600 "$SSH_KEY_PATH" "$ssh_key_copy"
+  SSH_KEY_PATH="$ssh_key_copy"
+fi
+
 export PATH=/usr/bin:/bin:/usr/local/bin
 export GIT_SSH_COMMAND="ssh -i $SSH_KEY_PATH -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$SSH_KNOWN_HOSTS"
 
@@ -57,6 +67,7 @@ fi
 
 while :; do
   if fetch_log="$(git fetch origin "$BRANCH" 2>&1)"; then
+    touch .ledgerd.health
     local_ref="$(git rev-parse HEAD 2>/dev/null || true)"
     remote_ref="$(git rev-parse "origin/$BRANCH" 2>/dev/null || true)"
     if [ -n "$remote_ref" ] && [ "$local_ref" != "$remote_ref" ]; then

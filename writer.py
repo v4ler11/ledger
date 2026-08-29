@@ -38,6 +38,7 @@ import fcntl
 import fnmatch
 import os
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -371,6 +372,12 @@ def main() -> None:
                 last_daily = slot_daily
         except Exception as e:
             log_critical(f"scheduled step failed: {e}")
+        # heartbeat for the image HEALTHCHECK (staleness = stuck loop)
+        try:
+            with open(os.path.join(REPO_DIR, ".ledgerd.health"), "w"):
+                pass
+        except OSError:
+            pass
         time.sleep(TICK_SLEEP)
 
 
@@ -382,6 +389,15 @@ if not REPO_URL:
 BRANCH = os.environ.get("BRANCH", "main")
 REPO_DIR = os.environ.get("REPO_DIR", "/repo")
 SSH_KEY_PATH = os.environ.get("SSH_KEY_PATH", "/root/.ssh/id_rsa")
+# OpenSSH refuses private keys with loose permissions ("UNPROTECTED PRIVATE
+# KEY FILE"), and a read-only bind mount can't be chmod'd in place. Copy the
+# key to a writable path with 0600 before building GIT_SSH_COMMAND.
+if os.path.isfile(SSH_KEY_PATH):
+    _key_copy = SSH_KEY_PATH + ".copy"
+    os.makedirs(os.path.dirname(_key_copy), exist_ok=True)
+    shutil.copyfile(SSH_KEY_PATH, _key_copy)
+    os.chmod(_key_copy, 0o600)
+    SSH_KEY_PATH = _key_copy
 SSH_KNOWN_HOSTS = os.environ.get("SSH_KNOWN_HOSTS", "/root/.ssh/known_hosts")
 FILE_PATTERNS = os.environ.get("FILE_PATTERNS", "*.bean *.jsonl")
 GIT_NAME = os.environ.get("GIT_NAME", "Finances Writer")

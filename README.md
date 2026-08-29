@@ -24,7 +24,10 @@ Single-writer / many-readers git sync of ledger files (`.bean`, `.jsonl`).
 
 - Private repo reachable over SSH (e.g. Gitea/GitHub).
 - SSH private key — default `~/.ssh/id_rsa` — allowed to push (writer) or
-  read (reader). Mounted read-only into the container.
+  read (reader). Mounted read-only into the container; both entrypoints copy
+  it to a writable in-container path with mode `0600` at startup, so loose
+  host-file permissions (e.g. `644`) never trigger OpenSSH's
+  "UNPROTECTED PRIVATE KEY FILE" refusal.
 - `TZ` matching your local time so the 23:59 day boundary aligns.
 
 ## Writer
@@ -73,6 +76,12 @@ Run as many readers as you like.
 
 First SSH connection accepts the host key (`StrictHostKeyChecking=accept-new`)
 into `$SSH_KNOWN_HOSTS`, so an empty mounted file works for bootstrapping.
+
+Both images ship a `HEALTHCHECK`: each successful reader fetch / writer tick
+touches `<REPO_DIR>/.ledgerd.health`, and the probe fails when that stamp is
+older than `2 * PULL_INTERVAL` (reader) / `2 * TICK_SLEEP` (writer) plus 90s,
+so `docker ps`/monitoring shows `unhealthy` when a container stops making
+progress (e.g. stuck on a bad key or network).
 
 ## Limits
 
