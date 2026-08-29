@@ -27,7 +27,7 @@ jobs:
       LEDGER_TG_TARGET_USER_ID: ${{ secrets.LEDGER_TG_TARGET_USER_ID }}
       LEDGER_TG_BOT_TOKEN: ${{ secrets.LEDGER_TG_BOT_TOKEN }}
       LEDGER_OPENROUTER_API_KEY: ${{ secrets.LEDGER_OPENROUTER_API_KEY }}
-      LEDGER_PATH: ${{ runner.temp }}/ledger-test.bean
+      LEDGER_PATH: ${{ github.workspace }}/ledger-test.bean
     steps:
       - name: Checkout
         uses: actions/checkout@v4
