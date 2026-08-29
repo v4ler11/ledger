@@ -73,4 +73,10 @@ into `$SSH_KNOWN_HOSTS`, so an empty mounted file works for bootstrapping.
   every hourly push *and* on the daily force-push; exclude the `ghooks.gitea.io` /
   GitHub webhook paths if you enable hooks on the repo.
 - The writer force-pushes the daily squash (`--force-with-lease`), so the
-  branch must not receive commits from other writers.
+  branch must not receive commits from other writers. Manual commits are
+  preserved (writer commits carry an `X-Ledger-Writer: true` trailer; a
+  manual commit whose message looks like `dd-mm-yyyy` is never absorbed).
+- If a manual commit conflicts with a pending hourly commit, the rebase is
+  aborted and reported as CRITICAL; the writer keeps running and skips
+  merging until the divergence is resolved by hand (`git rebase --continue`
+  after fixing the conflict, or pushing the local commit).
