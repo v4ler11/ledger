@@ -1,4 +1,4 @@
-name: pyright
+name: ledger-pyright
 
 on:
   push:

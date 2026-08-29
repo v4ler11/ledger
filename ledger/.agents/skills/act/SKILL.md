@@ -21,8 +21,8 @@ validate them without a running Forgejo runner.
 
 | Workflow | Job | Runs |
 |----------|-----|------|
-| `pyright.yml` | `pyright` | `uv run pyright` (0 errors/0 warnings is green) |
-| `test.yml`    | `test`    | `uv run pytest -q` (127 passed is green) |
+| `ledger-pyright.yml` | `ledger-pyright` | `uv run pyright` (0 errors/0 warnings is green) |
+| `ledger-test.yml`    | `ledger-test`    | `uv run pytest -q` (127 passed is green) |
 
 Both jobs reuse the composite action `.github/actions/setup-ssh-private/` to
 install an SSH deploy key so `uv sync --frozen --dev` can clone the **private**
@@ -43,7 +43,7 @@ running Docker daemon (Docker Desktop / the engine reachable at
 
 ```bash
 act -n                          # dry-run ALL workflows
-act -n -W .github/workflows/pyright.yml   # one workflow
+act -n -W .github/workflows/ledger-pyright.yml   # one workflow
 ```
 
 A parse/ref error fails earlier than this project's workflows ever did — the

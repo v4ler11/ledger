@@ -1,4 +1,4 @@
-name: test
+name: ledger-test
 
 on:
   push:
