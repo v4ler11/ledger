@@ -13,6 +13,7 @@ Bridges:
 """
 
 import asyncio
+import collections.abc as abc
 import json
 from typing import List, Tuple
 
@@ -108,8 +109,20 @@ class MCPTool(Tool):
         ]
 
     async def _invoke(self, args: dict) -> MCPToolResult:
-        # Ledger handlers are async functions returning MCPToolResult directly.
-        return await self.tool.func(args)
+        # MCP handlers are async functions returning an MCPToolResult, or
+        # async generators streaming progress then the result (the server's
+        # call convention). Run the handler the same way the server does:
+        # await a coroutine, drain a stream for its terminal result.
+        result = self.tool.func(args)
+        if isinstance(result, abc.AsyncIterator):
+            final: MCPToolResult | None = None
+            async for part in result:
+                if isinstance(part, MCPToolResult):
+                    final = part
+            if final is None:
+                raise RuntimeError(f"tool '{self.name}' stream ended without a result")
+            return final
+        return await result
 
 
 def chat_tools() -> List[Tool]:

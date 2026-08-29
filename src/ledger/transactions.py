@@ -19,7 +19,7 @@ import io
 from datetime import date as _date
 from decimal import Decimal
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
 
 from beancount.core import amount, data, position
 from beancount.parser import printer
@@ -44,16 +44,13 @@ from .ledger import LedgerError
 #   * meta:  per-posting Key: Value metadata dict
 PostingDict = Dict[str, object]
 PostingSpec = Union[
-    Tuple[str, object, object],        # (account, number, currency)
-    Tuple[str, None],                  # elided balancing leg
-    Tuple[str, object, object, object, object, object, object],  # full tuple form
+    Tuple[Any, ...],  # shorthand: (account, number[, currency[, cost, price, flag, meta]])
     PostingDict,
 ]
 
 # cost: (number, currency) | (number, currency, date, label) | CostSpec | dict
 CostSpec = Union[
-    Tuple[object, str],
-    Tuple[object, str, object, object],
+    Tuple[Any, ...],
     "position.CostSpec",
     Dict[str, object],
 ]
@@ -65,7 +62,36 @@ def _as_decimal(number: object) -> Decimal:
     return Decimal(str(number))
 
 
-def _make_cost(spec: CostSpec) -> Optional[position.CostSpec]:
+def _spec_str(value: object, what: str) -> str:
+    """Validate a posting-spec value that must be a string."""
+    if not isinstance(value, str):
+        raise TypeError(f"posting {what} must be a string, got {value!r}")
+    return value
+
+
+def _spec_opt_str(value: object, what: str) -> Optional[str]:
+    if value is None:
+        return None
+    return _spec_str(value, what)
+
+
+def _spec_opt_bool(value: object, what: str) -> Optional[bool]:
+    if value is None:
+        return None
+    if not isinstance(value, bool):
+        raise TypeError(f"posting {what} must be a bool, got {value!r}")
+    return value
+
+
+def _spec_opt_date(value: object, what: str) -> Optional[_date]:
+    if value is None:
+        return None
+    if not isinstance(value, _date):
+        raise TypeError(f"posting {what} must be a date, got {value!r}")
+    return value
+
+
+def _make_cost(spec: object) -> Optional[position.CostSpec]:
     """Normalise a cost spec into a v3 ``position.CostSpec``.
 
     ``{183.07 USD}``        -> "number", "currency"
@@ -86,21 +112,24 @@ def _make_cost(spec: CostSpec) -> Optional[position.CostSpec]:
         if len(spec) == 2:
             number, currency = spec[0], spec[1]
             return position.CostSpec(
-                _as_decimal(number), None, currency, None, None, None
+                _as_decimal(number), None, _spec_str(currency, "cost currency"),
+                None, None, None,
             )
         if len(spec) == 4:
-            number, currency, date, label = spec
+            number, currency, date_, label = spec
             return position.CostSpec(
-                _as_decimal(number), None, currency, date, label, None
+                _as_decimal(number), None, _spec_str(currency, "cost currency"),
+                _spec_opt_date(date_, "cost date"),
+                _spec_opt_str(label, "cost label"), None,
             )
     if isinstance(spec, dict):
         return position.CostSpec(
             number_per=_opt_decimal(spec.get("number_per", spec.get("number"))),
             number_total=_opt_decimal(spec.get("number_total", spec.get("total"))),
-            currency=spec.get("currency"),
-            date=spec.get("date"),
-            label=spec.get("label"),
-            merge=spec.get("merge"),
+            currency=_spec_opt_str(spec.get("currency"), "cost currency"),
+            date=_spec_opt_date(spec.get("date"), "cost date"),
+            label=_spec_opt_str(spec.get("label"), "cost label"),
+            merge=_spec_opt_bool(spec.get("merge"), "cost merge"),
         )
     raise TypeError(f"unsupported cost spec: {spec!r}")
 
@@ -109,7 +138,7 @@ def _opt_decimal(value: object) -> Optional[Decimal]:
     return None if value is None else _as_decimal(value)
 
 
-def _make_price(spec: Optional[Union[Tuple[object, str], Dict[str, object]]], units_number) -> Optional[amount.Amount]:
+def _make_price(spec: object, units_number: object) -> Optional[amount.Amount]:
     """Normalize a price spec into a per-unit ``amount.Amount``.
 
     ``Posting.price`` is *always* per-unit in the data model, so a total price
@@ -166,16 +195,18 @@ def make_posting(spec: PostingSpec) -> data.Posting:
       meta      (dict)           per-posting Key: Value metadata
     """
     if isinstance(spec, dict):
-        account = spec.get("account")
+        account = _spec_str(spec.get("account"), "account")
         number = spec.get("number")
         currency = spec.get("currency")
         units = None if number is None else amount.Amount(
-            _as_decimal(number), str(currency)
+            _as_decimal(number), _spec_str(currency, "currency")
         )
         cost = _make_cost(spec.get("cost"))
         price = _make_price(spec.get("price"), number)
-        flag = spec.get("flag")
-        meta = dict(spec.get("meta") or {})
+        flag = _spec_opt_str(spec.get("flag"), "flag")
+        meta = spec.get("meta")
+        if meta is not None and not isinstance(meta, dict):
+            raise TypeError(f"posting meta must be a dict, got {meta!r}")
         return data.Posting(account, units, cost, price, flag, meta or None)
 
     # Tuple shorthands: (account, number, currency[, cost, price, flag, meta]).
@@ -183,16 +214,18 @@ def make_posting(spec: PostingSpec) -> data.Posting:
     number = spec[1]
     cost: Optional[position.CostSpec] = None
     if number is not None:
-        currency = spec[2]
+        currency = _spec_str(spec[2], "currency")
         units = amount.Amount(_as_decimal(number), currency)
         if len(spec) >= 4 and spec[3] is not None:
             cost = _make_cost(spec[3])
     else:
         units = None
     price = _make_price(spec[4] if len(spec) >= 5 else None, number)
-    flag = spec[5] if len(spec) >= 6 else None
+    flag = _spec_opt_str(spec[5] if len(spec) >= 6 else None, "flag")
     meta = spec[6] if len(spec) >= 7 else None
-    return data.Posting(account, units, cost, price, flag, dict(meta) if meta else None)
+    if meta is not None and not isinstance(meta, dict):
+        raise TypeError(f"posting meta must be a dict, got {meta!r}")
+    return data.Posting(account, units, cost, price, flag, meta or None)
 
 
 def leg(
@@ -236,7 +269,7 @@ def elided(account: str) -> Tuple[str, None]:
 def make_transaction(
     date: _date,
     narration: str,
-    postings: Union[Iterable[PostingSpec], Iterable[data.Posting]],
+    postings: Iterable[Union[PostingSpec, data.Posting]],
     *,
     payee: Optional[str] = None,
     flag: str = "*",
@@ -303,7 +336,7 @@ def add_transaction(
     path: Union[str, Path],
     date: _date,
     narration: str,
-    postings: Union[Iterable[PostingSpec], Iterable[data.Posting]],
+    postings: Iterable[Union[PostingSpec, data.Posting]],
     *,
     payee: Optional[str] = None,
     flag: str = "*",

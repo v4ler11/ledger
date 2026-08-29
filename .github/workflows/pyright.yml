@@ -1,0 +1,28 @@
+name: pyright
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  pyright:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Set up SSH for private dependencies
+        uses: ./.github/actions/setup-ssh-private
+        with:
+          ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Install dependencies
+        run: uv sync --frozen --dev
+
+      - name: Run pyright
+        run: uv run pyright

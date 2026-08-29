@@ -2,9 +2,7 @@ import asyncio
 import functools
 import json
 import sys
-import time as _clock
 from datetime import date
-from pathlib import Path
 
 from mcp.schemas.other import (
     INTERNAL_ERROR,
@@ -15,6 +13,7 @@ from mcp.schemas.other import (
 from mcp.schemas.tools import MCPTool, MCPToolDefinition, MCPToolResult, MCPToolResultText
 from mcp.server import MCPServer
 
+from ledger.globals import LEDGER_PATH
 from .accounts import add_account, format_account
 from .transactions import add_transaction, format_transaction
 from .receipts import Receipt, ReceiptItem, add_receipt
@@ -31,9 +30,6 @@ from .recurring import (
 )
 
 
-LEDGER_PATH = Path("/Users/valerii/code/finances/main.bean")
-
-
 def _middleware() -> None:
     """Run the recurring-check middleware before a tool executes.
 
@@ -47,14 +43,15 @@ def _middleware() -> None:
         sys.stderr.write(f"recurring check failed: {exc}\n")
         return
     for outcome in outcomes:
-        if outcome.get("ok"):
+        rule_id = outcome["id"]
+        if outcome["ok"]:
             sys.stderr.write(
-                f"recurring: settled {outcome['id']} on {outcome['date']}\n"
+                f"recurring: settled {rule_id} on {outcome.get('date', '')}\n"
             )
         else:
-            for err in outcome["errors"]:
+            for err in outcome.get("errors", []):
                 sys.stderr.write(
-                    f"recurring: {outcome['id']} not settled: "
+                    f"recurring: {rule_id} not settled: "
                     f"{err.get('message') or err}\n"
                 )
 

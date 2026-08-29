@@ -1,12 +1,15 @@
 """Tests for the chat-library bridge (ledger.tools)."""
 
 import asyncio
+from typing import cast
+
+import aiohttp
 
 from ledger import chat_tools
 from ledger.mcp_server import LEDGER_TOOLS
 from ledger.tools import MCPTool, mcp_tool_to_chat_tool, tool_result_text
 from mcp.schemas.tools import MCPToolResult, MCPToolResultText
-from chat.types import ChatMessageTool, ToolCall
+from chat.types import ChatMessageTool, Function, ToolCall
 from chat.tools.context import ToolContext
 
 
@@ -45,8 +48,10 @@ def test_mcp_tool_to_chat_tool_flat_schema():
     assert posting.type == "array"
     # array items are preserved (Google AI Studio rejects arrays without
     # items); unsupported nested keywords are sanitized by the model
+    assert posting.items is not None
     assert posting.items.type == "object"
     assert posting.items.required == ["account"]
+    assert posting.items.properties is not None
     assert posting.items.properties["account"].type == "string"
     assert not hasattr(posting.items, "additionalProperties")
 
@@ -54,7 +59,10 @@ def test_mcp_tool_to_chat_tool_flat_schema():
 def test_validate_does_not_gate_execution():
     """MCP handlers validate internally; the bridge defers to execution."""
     tool = MCPTool(tool_by_name("add_transaction"))
-    ok, msgs = tool.validate_tool_call_args(None, None, {})
+    # ctx and tool_call are intentionally unused by this bridge method.
+    ok, msgs = tool.validate_tool_call_args(
+        cast(ToolContext, None), cast(ToolCall, None), {}
+    )
     assert ok is True
     assert msgs == []
 
@@ -64,7 +72,7 @@ def test_execute_add_transaction(scratch_ledger, monkeypatch):
     tool = MCPTool(tool_by_name("add_transaction"))
     call = ToolCall(
         id="call_1",
-        function={"name": "add_transaction", "arguments": "{}"},
+        function=Function(name="add_transaction", arguments="{}"),
     )
     args = {
         "date": "2024-03-01",
@@ -74,7 +82,7 @@ def test_execute_add_transaction(scratch_ledger, monkeypatch):
             {"account": "Assets:Bank:Checking", "elided": True},
         ],
     }
-    ctx = ToolContext(session=None)
+    ctx = ToolContext(session=cast(aiohttp.ClientSession, None))
 
     async def run():
         return await tool.execute(ctx, call, args)
@@ -96,7 +104,7 @@ def test_execute_reports_error_as_tool_message(scratch_ledger, monkeypatch):
     tool = MCPTool(tool_by_name("add_transaction"))
     call = ToolCall(
         id="call_2",
-        function={"name": "add_transaction", "arguments": "{}"},
+        function=Function(name="add_transaction", arguments="{}"),
     )
     args = {
         "date": "2024-03-01",
@@ -106,7 +114,7 @@ def test_execute_reports_error_as_tool_message(scratch_ledger, monkeypatch):
             {"account": "Assets:Cash", "elided": True},  # not opened → validation fails closed
         ],
     }
-    ctx = ToolContext(session=None)
+    ctx = ToolContext(session=cast(aiohttp.ClientSession, None))
 
     async def run():
         return await tool.execute(ctx, call, args)
@@ -115,7 +123,9 @@ def test_execute_reports_error_as_tool_message(scratch_ledger, monkeypatch):
 
     assert ok is True
     assert len(msgs) == 1
-    assert "Errors" in msgs[0].content or "error" in msgs[0].content.lower()
+    content = msgs[0].content
+    assert isinstance(content, str)
+    assert "Errors" in content or "error" in content.lower()
     assert "Bad" not in scratch_ledger.read_text()  # untouched on error
 
 
@@ -124,9 +134,9 @@ def test_execute_list_accounts(scratch_ledger, monkeypatch):
     tool = MCPTool(tool_by_name("list_accounts"))
     call = ToolCall(
         id="call_3",
-        function={"name": "list_accounts", "arguments": "{}"},
+        function=Function(name="list_accounts", arguments="{}"),
     )
-    ctx = ToolContext(session=None)
+    ctx = ToolContext(session=cast(aiohttp.ClientSession, None))
 
     async def run():
         return await tool.execute(ctx, call, {})
@@ -134,7 +144,9 @@ def test_execute_list_accounts(scratch_ledger, monkeypatch):
     ok, msgs = asyncio.run(run())
 
     assert ok is True
-    assert "Assets:Bank:Checking" in msgs[0].content
+    content = msgs[0].content
+    assert isinstance(content, str)
+    assert "Assets:Bank:Checking" in content
 
 
 def test_tool_result_text_flattens_content():

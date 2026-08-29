@@ -1,6 +1,6 @@
 import asyncio
 
-from aiogram.client.session import aiohttp
+import aiohttp
 
 from tg_bot.commands import register_commands
 from tg_bot.handlers import register_handlers

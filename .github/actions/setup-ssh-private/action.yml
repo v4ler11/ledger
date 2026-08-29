@@ -1,0 +1,31 @@
+name: Set up SSH for private dependencies
+description: >-
+  Installs an SSH deploy key so uv can fetch private git dependencies
+  (chat, mcp via [tool.uv.sources]) during a CI job. No-ops when no key
+  is provided, assuming the runner already has host access.
+inputs:
+  ssh_private_key:
+    description: >-
+      Private key (PEM) authorized to read the private dependency repos.
+      Optional; when empty the step assumes the runner can reach the git
+      host on its own.
+    required: false
+    default: ""
+runs:
+  using: composite
+  steps:
+    - name: Install SSH key
+      shell: bash
+      env:
+        # Env, not script interpolation: the key is multi-line (PEM) and
+        # must not be spliced into the run block.
+        SSH_PRIVATE_KEY: ${{ inputs.ssh_private_key }}
+      run: |
+        if [ -z "$SSH_PRIVATE_KEY" ]; then
+          echo "SSH_PRIVATE_KEY secret is not set; assuming runner can reach ssh.git.valerii.casa"
+          exit 0
+        fi
+        mkdir -p ~/.ssh
+        umask 077
+        printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+        ssh-keyscan -t ed25519 ssh.git.valerii.casa 2>/dev/null >> ~/.ssh/known_hosts || true

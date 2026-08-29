@@ -22,7 +22,7 @@ import json
 import time as _clock
 from datetime import date, datetime, time
 from pathlib import Path
-from typing import Dict, List, Literal, Optional, Union
+from typing import Dict, List, Literal, NotRequired, Optional, TypedDict, Union
 
 from dateutil.rrule import rrulestr
 from pydantic import BaseModel, Field
@@ -32,6 +32,20 @@ from .transactions import add_transaction, elided, leg
 
 # Throttle: settle due rules at most once per this many seconds.
 HOUR_SECONDS = 3600.0
+
+
+class RecurringOutcome(TypedDict):
+    """One rule's settlement result.
+
+    id/ok are always present; the variant keys follow: ``date``/``next`` on
+    success, ``errors`` on failure.
+    """
+
+    id: str
+    ok: bool
+    date: NotRequired[str]
+    next: NotRequired[str]
+    errors: NotRequired[List[LedgerError]]
 
 
 class RecurringRule(BaseModel):
@@ -145,7 +159,7 @@ def _fmt_amount(value: float) -> str:
 
 def process_recurring(
     ledger: Union[str, Path], today: Optional[date] = None
-) -> List[Dict[str, object]]:
+) -> List[RecurringOutcome]:
     """Settle every active rule whose next_settle_date is before ``today``.
 
     Each due rule is written to the ledger dated on its next_settle_date,
@@ -158,7 +172,7 @@ def process_recurring(
     """
     today = today or date.today()
     store = load_rules(ledger)
-    outcomes: List[Dict[str, object]] = []
+    outcomes: List[RecurringOutcome] = []
     changed = False
     for rule in list(store.rules.values()):
         if rule.status != "active":
@@ -231,7 +245,7 @@ _last_check: float = 0.0
 
 def recurring_check(
     ledger: Union[str, Path], today: Optional[date] = None
-) -> List[Dict[str, object]]:
+) -> List[RecurringOutcome]:
     """Settle due rules, at most once per hour.
 
     Cheap when nothing is due or when the throttle window has not elapsed:

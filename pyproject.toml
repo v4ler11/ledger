@@ -19,11 +19,17 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "pyright>=1.1.411",
     "pytest>=8.0.0",
 ]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ledger"]
+
+[tool.pyright]
+include = ["src", "tests", "examples"]
+pythonVersion = "3.13"
+typeCheckingMode = "basic"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

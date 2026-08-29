@@ -1,13 +1,13 @@
 import asyncio
 import base64
 import datetime
-import os
 from typing import List, Dict, Optional, Union
 
 from aiogram import types
 from aiogram.fsm.context import FSMContext
 
 from ledger import chat_tools
+from ledger.globals import MODEL, API_KEY, TG_TARGET_USER_ID
 from tg_bot.state import State
 from tg_bot.bot import dp
 from chat import ChatMessage, ChatMessageUser, ChatMessageAssistant, ChatMessageSystem, ChatPost, ToolContext, \
@@ -15,9 +15,6 @@ from chat import ChatMessage, ChatMessageUser, ChatMessageAssistant, ChatMessage
     chat_completion_not_stream_with_tools, chat_completion_not_stream
 
 
-API_KEY  = os.environ.get("LEDGER_OPENROUTER_API_KEY")
-MODEL = "openrouter/google/gemini-3.7-flash"
-TARGET_USER_ID = 438796199
 
 # How long to wait for the remaining album photos after the last one seen,
 # before batching the whole group into one user message. Telegram delivers an
@@ -74,7 +71,7 @@ async def handler_any_text(
 ) -> None:
     user_text = message.text or message.caption or ""
 
-    if message.from_user is None or message.from_user.id != TARGET_USER_ID:
+    if message.from_user is None or message.from_user.id != TG_TARGET_USER_ID:
         await message.answer("Not Authorized")
         return
 
@@ -92,11 +89,14 @@ async def handler_any_text(
 
     image_data_urls: List[str] = []
     if message.photo:
-        buf = await message.bot.download(message.photo[-1].file_id)
+        bot = message.bot
+        if bot is None:
+            raise ValueError("message has no bot")
+        buf = await bot.download(message.photo[-1].file_id)
         if buf is None:
             raise ValueError("failed to download photo")
         image_data_urls.append(
-            encode_image_to_base64_data_url(buf.getvalue(), "image/jpeg")
+            encode_image_to_base64_data_url(buf.read(), "image/jpeg")
         )
 
     await respond(message, app_state, state, user_text, image_data_urls)
@@ -116,7 +116,10 @@ def _schedule_album_flush(
         album = _AlbumBuffer(message)
         app_state.album_buffers[key] = album
 
-    album.photo_file_ids.append(message.photo[-1].file_id)
+    photos = message.photo
+    if photos is None:
+        raise ValueError("album message has no photo")
+    album.photo_file_ids.append(photos[-1].file_id)
     if album.text is None:
         album.text = message.caption or ""
 
@@ -145,19 +148,22 @@ async def _flush_album_after_settle(
 
     image_data_urls: List[str] = []
     for file_id in album.photo_file_ids:
-        buf = await album.message.bot.download(file_id)
+        bot = album.message.bot
+        if bot is None:
+            raise ValueError("album message has no bot")
+        buf = await bot.download(file_id)
         if buf is None:
             raise ValueError("failed to download photo")
         image_data_urls.append(
-            encode_image_to_base64_data_url(buf.getvalue(), "image/jpeg")
+            encode_image_to_base64_data_url(buf.read(), "image/jpeg")
         )
 
-    if not album.text.strip() and not image_data_urls:
+    if not (album.text or "").strip() and not image_data_urls:
         await album.message.answer("Invalid message: text or image is required")
         return
 
     await respond(
-        album.message, app_state, state, album.text, image_data_urls
+        album.message, app_state, state, album.text or "", image_data_urls
     )
 
 
@@ -214,7 +220,7 @@ async def respond(
 
         chat_says = resp.choices[0].message.content
 
-        await message.answer(chat_says)
+        await message.answer(chat_says or "")
 
         history.append({"role": "assistant", "content": chat_says})
         await state.update_data(history=history)

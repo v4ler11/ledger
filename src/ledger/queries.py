@@ -1,5 +1,5 @@
 from datetime import date
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Set, Tuple, cast
 
 import beanquery
 
@@ -24,8 +24,31 @@ def _ledger_error_response(model_cls: type, errors: List[LedgerError]):
     return model_cls(
         error="Ledger has bean-check errors; fix them before querying.",
         error_type="ledger",
-        errors=[LedgerIssue(**err) for err in errors],
+        errors=[_as_issue(err) for err in errors],
     )
+
+
+def _as_issue(err: LedgerError) -> LedgerIssue:
+    """Map a loader-error dict onto the API issue model.
+
+    The keys are exactly what ``_format_loader_error`` builds (str/int
+    values); the alias types them as ``object``, so cast per field.
+    """
+    return LedgerIssue(
+        file=cast(Optional[str], err.get("file")),
+        line=cast(Optional[int], err.get("line")),
+        type=cast(Optional[str], err.get("type")),
+        message=cast(Optional[str], err.get("message")),
+    )
+
+
+def _tables(conn: beanquery.Connection) -> Mapping[str, Any]:
+    """Beanquery's table registry.
+
+    The lib annotates ``Connection.tables`` loosely (it is populated at
+    attach time); cast to the ``str -> table`` shape the queries use.
+    """
+    return cast(Mapping[str, Any], conn.tables)
 
 
 def _connect(manager: LedgerManager) -> Tuple[beanquery.Connection, List[LedgerError]]:
@@ -120,7 +143,7 @@ def bean_check(manager: LedgerManager) -> CheckResult:
     return CheckResult(
         ok=False,
         message=f"Ledger has {len(errors)} error(s).",
-        errors=[LedgerIssue(**err) for err in errors],
+        errors=[_as_issue(err) for err in errors],
     )
 
 
@@ -132,14 +155,14 @@ def _operating_currency(conn: beanquery.Connection) -> Optional[str]:
 def account_names(manager: LedgerManager) -> List[str]:
     """Every account declared in the ledger, sorted."""
     conn = manager.connection()
-    return sorted(str(row[0]) for row in conn.tables["accounts"])
+    return sorted(str(row[0]) for row in _tables(conn)["accounts"])
 
 
 def table_names(manager: LedgerManager) -> List[str]:
     """BQL-accessible table names, sorted. Note BQL FROM is not a SQL
     table selector."""
     conn = manager.connection()
-    return sorted(k for k in conn.tables if k is not None and k != "")
+    return sorted(k for k in _tables(conn) if k is not None and k != "")
 
 
 def list_accounts(manager: LedgerManager) -> AccountsList:
@@ -176,13 +199,14 @@ def commodity_names(manager: LedgerManager) -> List[str]:
     ``commodity`` directives, priced in the prices table, or posted as a
     unit currency."""
     conn = manager.connection()
+    tables = _tables(conn)
     currencies: Set[str] = set()
-    for row in conn.tables["commodities"]:
-        currencies.add(row.currency)
-    for _, _, _, amount in conn.tables["prices"]:
-        currencies.add(amount.currency)
-    for row in conn.tables["postings"]:
-        currencies.add(row.posting.units.currency)
+    for row in tables["commodities"]:
+        currencies.add(str(row.currency))
+    for _, _, _, amount in tables["prices"]:
+        currencies.add(str(amount.currency))
+    for row in tables["postings"]:
+        currencies.add(str(row.posting.units.currency))
     return sorted(currencies)
 
 
@@ -205,15 +229,16 @@ def list_tables(manager: LedgerManager) -> TablesList:
 def list_prices(manager: LedgerManager) -> PricesList:
     """Latest price per commodity, from the prices table (no 200-row cap)."""
     conn = manager.connection()
+    prices_table = _tables(conn)["prices"]
     latest: Dict[str, tuple] = {}
-    for _, price_date, currency, amount in conn.tables["prices"]:
+    for _, price_date, currency, amount in prices_table:
         prev = latest.get(currency)
         if prev is None or price_date > prev[0]:
             latest[currency] = (price_date, amount)
 
     prices = [
         Price(
-            commodity=currency,
+            commodity=str(currency),
             date=price_date.isoformat(),
             price=str(amount),
         )

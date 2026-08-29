@@ -171,7 +171,6 @@ __all__ = [
     "LedgerIssue",
     "Price",
     "PricesList",
-    "QueriesResult",
     "QueryResult",
     "Receipt",
     "ReceiptItem",
@@ -243,14 +242,17 @@ __all__ = [
     "transactions",
     "directives",
     "recurring",
-    "mcp_server",
+    # Lazy server names below are provided by module ``__getattr__``; pyright
+    # cannot see them as statically defined, so dunder-all membership is
+    # flagged (reportUnsupportedDunderAll) and intentionally ignored.
+    "mcp_server",  # pyright: ignore[reportUnsupportedDunderAll]
     "tools",
     "MCPTool",
     "chat_tools",
     "mcp_tool_to_chat_tool",
-    "create_server",
-    "handle_add_transaction",
-    "handle_list_accounts",
-    "run_stdio",
+    "create_server",  # pyright: ignore[reportUnsupportedDunderAll]
+    "handle_add_transaction",  # pyright: ignore[reportUnsupportedDunderAll]
+    "handle_list_accounts",  # pyright: ignore[reportUnsupportedDunderAll]
+    "run_stdio",  # pyright: ignore[reportUnsupportedDunderAll]
     "_format_loader_error",
 ]

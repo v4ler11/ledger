@@ -9,7 +9,7 @@ silently write a broken ledger.
 import io
 from datetime import date as _date
 from pathlib import Path
-from typing import Iterable, List, Optional, Tuple, Union
+from typing import Iterable, List, Optional, Tuple, Union, cast
 
 from beancount.core import data
 from beancount.parser import printer
@@ -25,15 +25,17 @@ from .ledger import LedgerError
 AccountEntry = Union[data.Open, data.Close]
 
 
-def _coerce_currencies(currencies: Optional[Iterable[str]]) -> Optional[frozenset]:
+def _coerce_currencies(
+    currencies: Optional[Iterable[str]],
+) -> Optional[list[str]]:
     if currencies is None:
         return None
     if isinstance(currencies, frozenset):
-        return currencies
-    return frozenset(currencies)
+        return list(currencies)
+    return list(currencies)
 
 
-def _coerce_booking(booking) -> object:
+def _coerce_booking(booking: Optional[Union[str, data.Booking]]) -> Optional[data.Booking]:
     """Accept ``None``, a ``Booking`` enum, or a booking-method name."""
     if booking is None:
         return None
@@ -65,7 +67,9 @@ def make_open(
         meta=data.new_metadata(filename, 0),
         date=date,
         account=account,
-        currencies=_coerce_currencies(currencies),
+        # The vendored Open annotation types currencies as non-optional
+        # list[Currency], but v3 accepts None (unrestricted account).
+        currencies=cast(list[data.Currency], _coerce_currencies(currencies)),
         booking=_coerce_booking(booking),
     )
 

@@ -1,4 +1,8 @@
 from aiogram import Bot, Dispatcher
+from ledger.globals import TG_BOT_TOKEN
 
-bot = Bot(token="8996264331:AAHAm2pcjJMflLY70GN8bhZlLNnJqH3jsf0")
+
+assert TG_BOT_TOKEN is not None, f"LEDGER_TG_BOT_TOKEN is not set"
+
+bot = Bot(token=TG_BOT_TOKEN)
 dp = Dispatcher()
