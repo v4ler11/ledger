@@ -13,7 +13,8 @@
 #
 # Notes:
 #   * The key needs read access to the repo (same key works if allowed).
-#   * Any uncommitted local changes in /repo are discarded on update.
+#   * Uncommitted local changes in /repo are stashed (not silently destroyed)
+#     when an update resets the tree; recover via `git stash list`.
 
 FROM alpine:3.20
 

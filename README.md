@@ -11,7 +11,11 @@ Single-writer / many-readers git sync of ledger files (`.bean`, `.jsonl`).
 - **Reader** (`reader.sh`, `Dockerfile.reader`): read-only mirror. Fetches
   every `PULL_INTERVAL` seconds (default 5 min) and hard-resets the working
   tree to `origin/$BRANCH`, so the writer's daily rewrites are followed
-  without conflict. Never pushes.
+  without conflict. Never pushes. Uncommitted local changes are stashed
+  (never silently destroyed) before the reset, and unreadable fetch errors
+  are logged with the underlying git/ssh diagnostic.
+- Both containers take a `flock` on `<REPO_DIR>/.ledgerd.lock`; a second
+  instance on the same `REPO_DIR` exits rather than racing.
 
 ## Requirements
 
