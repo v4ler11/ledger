@@ -67,22 +67,13 @@ fi
 
 while :; do
   if fetch_log="$(git fetch origin "$BRANCH" 2>&1)"; then
-    touch .ledgerd.health
+    touch "$REPO_DIR/.ledgerd.health"
     local_ref="$(git rev-parse HEAD 2>/dev/null || true)"
     remote_ref="$(git rev-parse "origin/$BRANCH" 2>/dev/null || true)"
     if [ -n "$remote_ref" ] && [ "$local_ref" != "$remote_ref" ]; then
-      # reset --hard destroys tracked modifications; keep a stash so an
-      # operator who exec'd in and edited a file can recover them
-      # (`git stash list` / `git stash pop`). Entries are never auto-dropped.
-      if ! git diff --quiet || ! git diff --cached --quiet; then
-        # best-effort only: under `set -e` a failed stash would kill the
-        # whole loop (crash-loop); degrade to warn-and-reset instead
-        if git stash push -m "ledgerd-reader $(date '+%Y-%m-%d %H:%M:%S')"; then
-          log "preserving uncommitted local changes (git stash push)"
-        else
-          log "warning: git stash failed; discarding uncommitted changes"
-        fi
-      fi
+      # reset --hard destroys tracked uncommitted changes; readers are
+      # ephemeral mirrors, so this is intended: DON'T stash -- the tree
+      # must exactly track origin/$BRANCH, nothing more.
       git reset --hard "origin/$BRANCH"
       log "updated to $(git log -1 --pretty='%h %s')"
     else

@@ -13,6 +13,9 @@
 #
 # Notes:
 #   * Mount ~/.ssh/id_rsa read-only; the key must be allowed to push.
+#     The read-only key is copied to a writable path with mode 0600 at
+#     startup, so loose host-side key permissions (e.g. 644) never trigger
+#     OpenSSH's "UNPROTECTED PRIVATE KEY FILE" refusal.
 #   * Pass TZ matching your local time so day/hour boundaries align.
 #   * Only files matching FILE_PATTERNS (default "*.bean *.jsonl") are
 #     ever staged by the writer. recurring.json is NOT matched by
