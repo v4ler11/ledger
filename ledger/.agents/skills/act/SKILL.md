@@ -23,6 +23,8 @@ validate them without a running Forgejo runner.
 |----------|-----|------|
 | `ledger-pyright.yml` | `ledger-pyright` | `uv run pyright` (0 errors/0 warnings is green) |
 | `ledger-test.yml`    | `ledger-test`    | `uv run pytest -q` (127 passed is green) |
+| `ledger-docker-publish.yml` | — | tag `ledger-v*` → multi-arch buildx push (needs registry creds + QEMU; not for act) |
+| `ledgerd-docker-publish.yml` | — | tag `ledgerd-v*` → multi-arch buildx push of writer+reader (not for act) |
 
 Both jobs reuse the composite action `.github/actions/setup-ssh-private/` to
 install an SSH deploy key so `uv sync --frozen --dev` can clone the **private**

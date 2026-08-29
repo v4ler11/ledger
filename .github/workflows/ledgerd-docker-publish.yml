@@ -1,0 +1,85 @@
+name: ledgerd-docker-publish
+
+on:
+  push:
+    tags:
+      - 'ledgerd-v*'
+
+env:
+  REGISTRY: app.git.valerii.cc
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ledgerd
+    outputs:
+      tag_version: ${{ steps.version.outputs.tag_version }}
+      major: ${{ steps.version.outputs.major }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify version match
+        id: version
+        run: |
+          FILE_VERSION=$(python3 -c 'import tomllib;print(tomllib.load(open("pyproject.toml","rb"))["project"]["version"])')
+          TAG_VERSION=${GITHUB_REF#refs/tags/ledgerd-v}
+          echo "$TAG_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' \
+            || { echo "::error::tag $GITHUB_REF is not ledgerd-vX.Y.Z"; exit 1; }
+          [ "$FILE_VERSION" = "$TAG_VERSION" ] \
+            || { echo "::error::version mismatch: pyproject.toml ($FILE_VERSION) vs tag ($TAG_VERSION)"; exit 1; }
+          echo "tag_version=$TAG_VERSION" >> "$GITHUB_OUTPUT"
+          echo "major=${TAG_VERSION%%.*}" >> "$GITHUB_OUTPUT"
+
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - dockerfile: Dockerfile.writer
+            image_name: ledgerd-writer
+          - dockerfile: Dockerfile.reader
+            image_name: ledgerd-reader
+    env:
+      IMAGE_NAME: ${{ github.repository_owner }}/${{ matrix.image_name }}
+      TAG_VERSION: ${{ needs.verify.outputs.tag_version }}
+      MAJOR: ${{ needs.verify.outputs.major }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          cache-image: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUBTOKEN }}
+
+      - name: Build and push ${{ matrix.dockerfile }}
+        uses: docker/build-push-action@v5
+        with:
+          context: ./ledgerd
+          file: ledgerd/${{ matrix.dockerfile }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:v${{ env.MAJOR }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:v${{ env.TAG_VERSION }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          cache-to: type=inline

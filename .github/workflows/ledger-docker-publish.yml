@@ -1,0 +1,80 @@
+name: ledger-docker-publish
+
+on:
+  push:
+    tags:
+      - 'ledger-v*'
+
+env:
+  REGISTRY: app.git.valerii.cc
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    defaults:
+      run:
+        working-directory: ledger
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up SSH for private dependencies
+        uses: ./.github/actions/setup-ssh-private
+        with:
+          ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Verify version match
+        id: version
+        run: |
+          FILE_VERSION=$(python3 -c 'import tomllib;print(tomllib.load(open("pyproject.toml","rb"))["project"]["version"])')
+          TAG_VERSION=${GITHUB_REF#refs/tags/ledger-v}
+          echo "$TAG_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' \
+            || { echo "::error::tag $GITHUB_REF is not ledger-vX.Y.Z"; exit 1; }
+          [ "$FILE_VERSION" = "$TAG_VERSION" ] \
+            || { echo "::error::version mismatch: pyproject.toml ($FILE_VERSION) vs tag ($TAG_VERSION)"; exit 1; }
+          echo "tag_version=$TAG_VERSION" >> "$GITHUB_OUTPUT"
+          echo "major=${TAG_VERSION%%.*}" >> "$GITHUB_OUTPUT"
+
+      - name: Load SSH key into agent (Dockerfile.tg uses RUN --mount=type=ssh)
+        run: |
+          if [ -f ~/.ssh/id_ed25519 ]; then
+            eval "$(ssh-agent -s)"
+            ssh-add ~/.ssh/id_ed25519
+            echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
+          else
+            echo "no SSH key installed; build will fail on private deps (chat, mcp)"
+          fi
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          cache-image: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUBTOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./ledger
+          file: ledger/Dockerfile.tg
+          platforms: linux/amd64,linux/arm64
+          push: true
+          ssh: default
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:v${{ steps.version.outputs.major }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:v${{ steps.version.outputs.tag_version }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          cache-to: type=inline
