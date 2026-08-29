@@ -1,0 +1,32 @@
+# Reader container: read-only mirror of the private repo. Fetches every
+# PULL_INTERVAL seconds (default 5 min) and hard-resets the working tree
+# to origin/$BRANCH, so the writer's daily history rewrites are followed
+# without conflict. Run one per consumer; the writer is the only pusher.
+#
+# Build:   docker build -f Dockerfile.reader -t finances-reader .
+# Run:     docker run -d --name finances-reader --restart unless-stopped \
+#            -e REPO_URL=ssh://git@ssh.git.valerii.casa/valerii/finances.git \
+#            -e TZ=Europe/Kyiv \
+#            -v ~/.ssh/id_rsa:/root/.ssh/id_rsa:ro \
+#            -v "$PWD":/repo \
+#            finances-reader
+#
+# Notes:
+#   * The key needs read access to the repo (same key works if allowed).
+#   * Any uncommitted local changes in /repo are discarded on update.
+
+FROM alpine:3.20
+
+RUN apk add --no-cache git openssh
+
+COPY reader.sh /usr/local/bin/reader.sh
+RUN chmod +x /usr/local/bin/reader.sh
+
+WORKDIR /repo
+
+ENV REPO_DIR=/repo \
+    BRANCH=main \
+    SSH_KEY_PATH=/root/.ssh/id_rsa \
+    PULL_INTERVAL=300
+
+ENTRYPOINT ["/usr/local/bin/reader.sh"]
