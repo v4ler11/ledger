@@ -15,6 +15,13 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      # ledger.globals reads these at import; tests monkeypatch values per-test,
+      # so only presence (and an int for TARGET_USER_ID) is required.
+      LEDGER_TG_TARGET_USER_ID: ${{ secrets.LEDGER_TG_TARGET_USER_ID }}
+      LEDGER_TG_BOT_TOKEN: ${{ secrets.LEDGER_TG_BOT_TOKEN }}
+      LEDGER_OPENROUTER_API_KEY: ${{ secrets.LEDGER_OPENROUTER_API_KEY }}
+      LEDGER_PATH: ${{ runner.temp }}/ledger-test.bean
     steps:
       - name: Checkout
         uses: actions/checkout@v4
