@@ -51,7 +51,9 @@ publish workflow triggers only on its own prefix:
 Rules:
 
 - Tag version must equal `version` in that project's `pyproject.toml`
-  (parsed with `tomllib`; mismatch fails the workflow with `::error::`).
+  (extracted with `sed` from the first `version = "X.Y.Z"` line — no Python
+  stdlib dependency, runners may lack `tomllib`; mismatch fails the workflow
+  with `::error::`).
 - Tag suffix must be strict `X.Y.Z` — no prerelease or partial suffixes.
 - A bare `vX.Y.Z` tag (no prefix) triggers neither workflow.
 

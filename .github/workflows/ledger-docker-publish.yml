@@ -30,7 +30,8 @@ jobs:
       - name: Verify version match
         id: version
         run: |
-          FILE_VERSION=$(python3 -c 'import tomllib;print(tomllib.load(open("pyproject.toml","rb"))["project"]["version"])')
+          FILE_VERSION=$(sed -nE 's/^version = "([0-9]+\.[0-9]+\.[0-9]+)"/\1/p' pyproject.toml | head -1)
+          [ -n "$FILE_VERSION" ] || { echo "::error::could not extract version from pyproject.toml"; exit 1; }
           TAG_VERSION=${GITHUB_REF#refs/tags/ledger-v}
           echo "$TAG_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' \
             || { echo "::error::tag $GITHUB_REF is not ledger-vX.Y.Z"; exit 1; }
