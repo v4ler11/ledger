@@ -1,7 +1,7 @@
 services:
   tg-bot:
     build:
-      context: .
+      context: ./ledger
       dockerfile: Dockerfile.tg
       ssh:
         - default
