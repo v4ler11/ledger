@@ -3,14 +3,20 @@ name: pyright
 on:
   push:
     paths:
-      - '**.py'
-      - '**.yaml'
-      - '**.yml'
+      - 'ledger/**.py'
+      - 'ledger/**.yaml'
+      - 'ledger/**.yml'
+      - '.github/**'
   pull_request:
     paths:
-      - '**.py'
-      - '**.yaml'
-      - '**.yml'
+      - 'ledger/**.py'
+      - 'ledger/**.yaml'
+      - 'ledger/**.yml'
+      - '.github/**'
+
+defaults:
+  run:
+    working-directory: ledger
 
 jobs:
   pyright:

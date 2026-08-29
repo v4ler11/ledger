@@ -1,0 +1,7 @@
+# Shared Python ignores (each project also carries its own .gitignore)
+.venv
+__pycache__/
+*.py[oc]
+*.egg-info
+.pytest_cache/
+.idea/
