@@ -9,23 +9,8 @@ Two projects side by side, each with its own full git history (merged via second
 
 ## Versioning
 
-The two projects are versioned independently. A git tag applies to one commit
-and cannot encode two versions, so tags carry the project prefix; each
-workflow triggers only on its own prefix:
-
-| Git tag | Images pushed to `app.git.valerii.cc` | Workflow |
-|---|---|---|
-| `ledger-vX.Y.Z` | `valerii/ledger:vX`, `valerii/ledger:vX.Y.Z`, `valerii/ledger:latest` | `ledger-docker-publish` |
-| `ledgerd-vX.Y.Z` | `valerii/ledgerd-writer` + `valerii/ledgerd-reader` (same three tags each) | `ledgerd-docker-publish` |
-
-The tag version must equal `version` in that project's `pyproject.toml` — the
-workflow fails otherwise.
-
-```sh
-git tag ledger-v0.1.0
-git tag ledgerd-v0.1.0
-git push origin ledger-v0.1.0 ledgerd-v0.1.0
-```
+Tag scheme, publish workflows and release flow: see
+[README.dev.md](README.dev.md) — Versioning and releases.
 
 ## History
 
