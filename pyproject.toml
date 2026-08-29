@@ -16,6 +16,7 @@ dependencies = [
     "mcp",
     "pydantic>=2.0.0",
     "scripts",
+    "tg_bot",
 ]
 
 [dependency-groups]
@@ -38,6 +39,7 @@ testpaths = ["tests"]
 [tool.uv.sources]
 chat = { git = "ssh://git@ssh.git.valerii.casa/valerii/chat.git" }
 scripts = { workspace = true }
+tg_bot = { workspace = true }
 mcp = { git = "ssh://git@ssh.git.valerii.casa/valerii/chat.git", subdirectory = "src/mcp" }
 
 [tool.uv.workspace]

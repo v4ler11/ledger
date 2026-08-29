@@ -1,6 +1,25 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "tg_bot"
 version = "0.1.0"
-description = ""
-requires-python = ">=3.12"
-dependencies = []
+description = "Telegram bot for the ledger MCP tools."
+requires-python = ">=3.13"
+dependencies = [
+    "aiohttp>=3.9",
+    "aiogram>=3.30.0",
+    "chat",
+    "ledger",
+]
+
+[project.scripts]
+tg_server = "tg_bot.tg_bot_server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["tg_bot"]
+
+[tool.uv.sources]
+chat = { git = "ssh://git@ssh.git.valerii.casa/valerii/chat.git" }
+ledger = { workspace = true }

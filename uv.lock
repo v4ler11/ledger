@@ -744,6 +744,7 @@ dependencies = [
     { name = "mcp" },
     { name = "pydantic" },
     { name = "scripts" },
+    { name = "tg-bot" },
 ]
 
 [package.dev-dependencies]
@@ -761,6 +762,7 @@ requires-dist = [
     { name = "mcp", git = "ssh://git@ssh.git.valerii.casa/valerii/chat.git?subdirectory=src%2Fmcp" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "scripts", editable = "src/scripts" },
+    { name = "tg-bot", editable = "src/tg_bot" },
 ]
 
 [package.metadata.requires-dev]
@@ -1500,7 +1502,21 @@ wheels = [
 [[package]]
 name = "tg-bot"
 version = "0.1.0"
-source = { virtual = "src/tg_bot" }
+source = { editable = "src/tg_bot" }
+dependencies = [
+    { name = "aiogram" },
+    { name = "aiohttp" },
+    { name = "chat" },
+    { name = "ledger" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aiogram", specifier = ">=3.30.0" },
+    { name = "aiohttp", specifier = ">=3.9" },
+    { name = "chat", git = "ssh://git@ssh.git.valerii.casa/valerii/chat.git" },
+    { name = "ledger", editable = "." },
+]
 
 [[package]]
 name = "tiktoken"
