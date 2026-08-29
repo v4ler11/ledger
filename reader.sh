@@ -44,7 +44,11 @@ trap 'log "shutting down"; exit 0' TERM INT
 ensure_repo
 cd "$REPO_DIR"
 
-# single-instance guard, same lock file as the writer
+# One ledgerd process (reader or writer) per REPO_DIR, enforced by flock on
+# the same lock file the writer uses. Intended deployment gives every
+# container its own volume -- readers and writer share REPO_URL, never a
+# REPO_DIR -- so contention means misconfiguration or debugging; the second
+# starter exits here rather than racing a writer's commits / a reader's reset.
 exec 9>"$REPO_DIR/.ledgerd.lock"
 if ! flock -n 9; then
   log "another ledgerd instance already holds the lock on $REPO_DIR; exiting"
@@ -57,10 +61,16 @@ while :; do
     remote_ref="$(git rev-parse "origin/$BRANCH" 2>/dev/null || true)"
     if [ -n "$remote_ref" ] && [ "$local_ref" != "$remote_ref" ]; then
       # reset --hard destroys tracked modifications; keep a stash so an
-      # operator who exec'd in and edited a file can recover them.
+      # operator who exec'd in and edited a file can recover them
+      # (`git stash list` / `git stash pop`). Entries are never auto-dropped.
       if ! git diff --quiet || ! git diff --cached --quiet; then
-        log "preserving uncommitted local changes (git stash push)"
-        git stash push -m "ledgerd-reader $(date '+%Y-%m-%d %H:%M:%S')"
+        # best-effort only: under `set -e` a failed stash would kill the
+        # whole loop (crash-loop); degrade to warn-and-reset instead
+        if git stash push -m "ledgerd-reader $(date '+%Y-%m-%d %H:%M:%S')"; then
+          log "preserving uncommitted local changes (git stash push)"
+        else
+          log "warning: git stash failed; discarding uncommitted changes"
+        fi
       fi
       git reset --hard "origin/$BRANCH"
       log "updated to $(git log -1 --pretty='%h %s')"

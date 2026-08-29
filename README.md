@@ -15,7 +15,10 @@ Single-writer / many-readers git sync of ledger files (`.bean`, `.jsonl`).
   (never silently destroyed) before the reset, and unreadable fetch errors
   are logged with the underlying git/ssh diagnostic.
 - Both containers take a `flock` on `<REPO_DIR>/.ledgerd.lock`; a second
-  instance on the same `REPO_DIR` exits rather than racing.
+  instance on the same `REPO_DIR` exits rather than racing. Intended
+  deployment gives each container its own volume (they share `REPO_URL`,
+  never a `REPO_DIR`); a writer and reader on one volume is a
+  misconfiguration that the lock surfaces at startup.
 
 ## Requirements
 

@@ -129,6 +129,9 @@ def ensure_branch() -> None:
 
 
 def acquire_lock() -> None:
+    # One ledgerd process (writer or reader) per REPO_DIR; readers flock the
+    # same file. Intended deployment gives each container its own volume, so
+    # contention means misconfiguration -- fail fast instead of racing.
     fd = open(os.path.join(REPO_DIR, ".ledgerd.lock"), "w")
     try:
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
