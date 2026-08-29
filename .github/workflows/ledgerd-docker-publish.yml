@@ -6,7 +6,7 @@ on:
       - 'ledgerd-v*'
 
 env:
-  REGISTRY: app.git.valerii.cc
+  REGISTRY: git.valerii.casa
 
 jobs:
   verify:

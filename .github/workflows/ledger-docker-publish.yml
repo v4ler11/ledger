@@ -6,7 +6,7 @@ on:
       - 'ledger-v*'
 
 env:
-  REGISTRY: app.git.valerii.cc
+  REGISTRY: git.valerii.casa
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:

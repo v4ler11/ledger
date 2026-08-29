@@ -43,7 +43,7 @@ The two projects are versioned independently. A git tag sits on a single
 commit and cannot carry two versions, so tags are prefixed per project; each
 publish workflow triggers only on its own prefix:
 
-| Git tag | Workflow | Images pushed to `app.git.valerii.cc` |
+| Git tag | Workflow | Images pushed to `git.valerii.casa` |
 |---|---|---|
 | `ledger-vX.Y.Z` | `ledger-docker-publish` | `valerii/ledger:vX`, `:vX.Y.Z`, `:latest` |
 | `ledgerd-vX.Y.Z` | `ledgerd-docker-publish` | `valerii/ledgerd-writer` and `valerii/ledgerd-reader` — each `vX`, `vX.Y.Z`, `latest` |
