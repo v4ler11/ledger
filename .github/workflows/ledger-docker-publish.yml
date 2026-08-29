@@ -40,16 +40,6 @@ jobs:
           echo "tag_version=$TAG_VERSION" >> "$GITHUB_OUTPUT"
           echo "major=${TAG_VERSION%%.*}" >> "$GITHUB_OUTPUT"
 
-      - name: Load SSH key into agent (Dockerfile.tg uses RUN --mount=type=ssh)
-        run: |
-          if [ -f ~/.ssh/id_ed25519 ]; then
-            eval "$(ssh-agent -s)"
-            ssh-add ~/.ssh/id_ed25519
-            echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
-          else
-            echo "no SSH key installed; build will fail on private deps (chat, mcp)"
-          fi
-
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
         with:

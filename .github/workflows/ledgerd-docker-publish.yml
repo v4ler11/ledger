@@ -56,6 +56,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up SSH for private dependencies
+        uses: ./.github/actions/setup-ssh-private
+        with:
+          ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
         with:

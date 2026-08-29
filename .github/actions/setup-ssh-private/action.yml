@@ -1,8 +1,11 @@
 name: Set up SSH for private dependencies
 description: >-
   Installs an SSH deploy key so uv can fetch private git dependencies
-  (chat, mcp via [tool.uv.sources]) during a CI job. No-ops when no key
-  is provided, assuming the runner already has host access.
+  (chat, mcp via [tool.uv.sources]) during a CI job, then starts ssh-agent
+  with the key loaded and exports SSH_AUTH_SOCK so build steps using
+  RUN --mount=type=ssh (build-push-action ssh: default) can reach the git
+  host. No-ops when no key is provided, assuming the runner already has
+  host access.
 inputs:
   ssh_private_key:
     description: >-
@@ -29,3 +32,14 @@ runs:
         umask 077
         printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
         ssh-keyscan -t ed25519 ssh.git.valerii.casa 2>/dev/null >> ~/.ssh/known_hosts || true
+
+    - name: Load SSH key into agent
+      shell: bash
+      run: |
+        if [ ! -f ~/.ssh/id_ed25519 ]; then
+          echo "no deploy key installed; skipping ssh-agent"
+          exit 0
+        fi
+        eval "$(ssh-agent -s)"
+        ssh-add ~/.ssh/id_ed25519
+        echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
