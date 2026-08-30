@@ -49,6 +49,8 @@ SELECT [DISTINCT] <cols>
 Txn-filter columns: date, year, month, day, flag, payee, narration, tags, links, id, type, accounts. has_account('Invest') is true if any posting account matches.
 Posting columns (SELECT/WHERE): those plus account, position, balance, number, currency, cost_number, cost_currency, price, weight, other_accounts, posting_flag, description.
 
+Metadata: meta('key') reads posting metadata (e.g. filename, lineno); entry_meta('key') reads the parent transaction's metadata (e.g. receipt_ids); any_meta('key') reads the posting, falling back to the transaction.
+
 Operators: = != < <= > >= AND OR NOT; ~ regexp on strings (account ~ 'Expenses:Food'); IN for sets ('trip' IN tags). Dates as YYYY-MM-DD. NULL = NULL is TRUE (no SQL three-valued logic). Aggregates (sum, count, first, last, min, max) need GROUP BY on every non-aggregate; no HAVING.
 
 Position/inventory: units(x) strips cost; cost(x) is acquisition cost; convert(x, 'USD') market value; value(x) cost-currency market value. sum(position) yields an Inventory.
@@ -64,6 +66,7 @@ Examples:
   SELECT account, sum(position) FROM OPEN ON 2024-01-01 CLOSE ON 2025-01-01 WHERE account ~ 'Income|Expenses' GROUP BY 1
   SELECT account, sum(position) FROM OPEN ON 2024-01-01 CLOSE ON 2025-01-01 CLEAR WHERE not account ~ 'Income|Expenses' GROUP BY 1
   SELECT date, narration WHERE year = 2024 AND 'trip-ny' IN tags AND account ~ 'Expenses'
+  SELECT date, payee, account, position, entry_meta('receipt_ids') AS receipt_id WHERE account ~ 'Expenses:Groceries'
   JOURNAL "Assets:Bank" FROM year = 2024
   BALANCES AT COST FROM CLOSE ON 2025-01-01"""
 
