@@ -74,7 +74,7 @@ Build notes:
 - ledger images are multi-arch (`linux/amd64`, `linux/arm64`) and install
   private deps through BuildKit SSH forwarding: the workflow loads
   `secrets.SSH_PRIVATE_KEY` into an agent and passes `ssh: default`
-  (`Dockerfile.tg` uses `RUN --mount=type=ssh`).
+  (`Dockerfile` uses `RUN --mount=type=ssh`).
 - ledgerd builds both images in one matrix job: `Dockerfile.writer` →
   `ledgerd-writer`, `Dockerfile.reader` → `ledgerd-reader`. No SSH needed
   (zero deps).

@@ -2,7 +2,9 @@
 
 Two projects side by side, each with its own full git history (merged via second parent of the monorepo merge commit):
 
-- [`ledger/`](ledger/) — personal finance ledger in [beancount](https://beancount.org/) format: Python library, MCP server, Telegram bot, CI (`.github/`), Docker packaging (`Dockerfile.tg`, `docker-compose.tg.yaml`). See [ledger/README.md](ledger/README.md).
+- [`ledger/`](ledger/) — personal finance ledger in [beancount](https://beancount.org/) format: Python library, MCP server, Telegram bot, CI (`.github/`), Docker packaging (`Dockerfile`, `docker-compose.tg.yaml`, plus server/client
+compose pairs `docker-compose.server.yml`, `docker-compose.client.yml` and
+their `.dev` local-build variants). See [ledger/README.md](ledger/README.md).
   - Venv: `ledger/.venv`; run from `ledger/` (`uv sync --frozen --dev`, `uv run pytest`, `uv run pyright`).
   - compose: `docker compose -f ledger/docker-compose.tg.yaml up` (build context is `./ledger`).
 - [`ledgerd/`](ledgerd/) — single-writer / multi-reader git sync of ledger files: `writer.py`, `reader.sh`, two Dockerfiles. See [ledgerd/README.md](ledgerd/README.md).

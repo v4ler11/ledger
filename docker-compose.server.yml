@@ -1,0 +1,41 @@
+# Server/prod variant: prebuilt images pulled from the git.valerii.casa
+# registry. Local-source builds — docker-compose.server.dev.yml.
+#
+# Writer:  commits *.bean/*.jsonl changes from /repo, pushes hourly and
+#          squashes daily (see ledgerd/README.md). Needs an SSH key that
+#          may push; mounted read-only at /root/.ssh/id_rsa.
+# Ledger:  tg_server bot; depends on the writer (service_healthy) so the
+#          repo is cloned and ticking before it starts. Both containers
+#          share the on-disk repo checkout: ./data/writer-repo is the
+#          writer's /repo and the bot's /data, so bot writes land in the
+#          repo the writer commits and pushes.
+#
+# Up:      cp .env.example .env && docker compose -f docker-compose.server.yml up -d
+# Env:     LEDGER_TG_BOT_TOKEN and LEDGER_TG_TARGET_USER_ID are required;
+#          everything else has a default (see .env.example).
+
+services:
+  writer:
+    image: git.valerii.casa/valerii/ledgerd-writer:latest
+    environment:
+      REPO_URL: ssh://git@ssh.git.valerii.casa/valerii/finances.git
+      TZ: ${TZ:-Europe/Lisbon}
+    volumes:
+      - ${HOME}/.ssh/id_rsa:/root/.ssh/id_rsa:ro
+      - ${LEDGER_DATA_DIR:-./data}/writer-repo:/repo
+    restart: unless-stopped
+
+  ledger:
+    image: git.valerii.casa/valerii/ledger:latest
+    command: ["uv", "run", "tg_server"]
+    depends_on:
+      writer:
+        condition: service_healthy
+    environment:
+      LEDGER_TG_BOT_TOKEN: ${LEDGER_TG_BOT_TOKEN:?set LEDGER_TG_BOT_TOKEN}
+      LEDGER_TG_TARGET_USER_ID: ${LEDGER_TG_TARGET_USER_ID:?set LEDGER_TG_TARGET_USER_ID}
+      LEDGER_OPENROUTER_API_KEY: ${LEDGER_OPENROUTER_API_KEY:?set LEDGER_OPENROUTER_API_KEY}
+      LEDGER_PATH: ${LEDGER_PATH:-/data/main.bean}
+    volumes:
+      - ${LEDGER_DATA_DIR:-./data}/writer-repo:/data
+    restart: unless-stopped

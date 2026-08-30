@@ -99,43 +99,24 @@ file inside the synced repo checkout (see below).
 ### Docker client (reader + MCP over stdio)
 
 [`docker-compose.client.yml`](../docker-compose.client.yml) (prod,
-prebuilt images) and `docker-compose.client.dev.yml` (dev, local builds)
-pair a read-only `reader` (ledgerd `Dockerfile.reader`) that keeps a
-mirror of the finances repo on disk with a `ledger` service hosting the
-MCP server.
+prebuilt image) and `docker-compose.client.dev.yml` (dev, local build)
+run the read-only `reader` (ledgerd `Dockerfile.reader`), which keeps a
+mirror of the finances repo on disk.
 
-The `ledger` service has **no baked command** — the image ships without a
-CMD, and stdio MCP means the user executes the server fresh on every
-session and hands the exec command to his chat client. The client sends
-JSON-RPC requests on the process's stdin and reads replies from stdout;
-nothing runs in the background.
-
-Keep the reader up as a daemon:
+The MCP server is **not** a container — stdio MCP spawns the process
+fresh per session, so the command the user gives his chat client is the
+host-side exec, run every time (see [MCP server](#mcp-server)):
 
 ```sh
-# prod (prebuilt images) / dev (local builds)
 docker compose -f docker-compose.client.yml up -d reader
-docker compose -f docker-compose.client.dev.yml up -d reader --build
-```
-
-Then register the MCP server with the chat client — either host-side
-(from `ledger/`), or containerized over the reader's checkout
-(`./data/reader-repo`, `LEDGER_PATH=/data/main.bean`; `-T` keeps stdio a
-pipe, not a TTY):
-
-```sh
-# host-side — every session runs the command fresh
+# chat client command (from ledger/):
 uv run mcp_server
-# or absolute, cwd-independent
-/Users/valerii/code/ledger/ledger/.venv/bin/mcp_server
-
-# containerized — spawns a one-off ledger container (waits for the
-# reader's first fetch via service_healthy)
-docker compose -f /path/to/docker-compose.client.yml run --rm -T ledger uv run mcp_server
 ```
 
-The reader never pushes; it hard-resets to `origin/$BRANCH` every
-`PULL_INTERVAL` and needs an SSH key with read access (see
+Point `LEDGER_PATH` at the ledger file — e.g. the reader's checkout
+(`./data/reader-repo/main.bean`) or your usual environment. The reader
+never pushes; it hard-resets to `origin/$BRANCH` every `PULL_INTERVAL`
+and needs an SSH key with read access (see
 [ledgerd/README.md](../ledgerd/README.md)).
 
 ## Chat bridge
