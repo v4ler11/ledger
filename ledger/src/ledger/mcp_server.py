@@ -34,6 +34,7 @@ __all__ = [
     "add_transaction_description",
     "create_server",
     "run_stdio",
+    "main",
 ]
 
 
@@ -76,5 +77,10 @@ def run_stdio(server_factory=create_server) -> None:
     asyncio.run(_serve(server_factory))
 
 
-if __name__ == "__main__":
+def main() -> None:
+    """Console-script entry point (``uv run mcp_server``)."""
     run_stdio(create_server)
+
+
+if __name__ == "__main__":
+    main()

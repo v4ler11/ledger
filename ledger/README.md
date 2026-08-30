@@ -41,25 +41,29 @@ Requires Python ≥ 3.13. Dependencies: `beancount>=3.2.3` and
 
 `ledger/mcp_server.py` is an MCP server speaking JSON-RPC 2.0 over stdio: it
 reads one request per line on stdin and answers on stdout, so any MCP
-client can launch it as a subprocess. Run it with the project's venv:
+client can launch it as a subprocess. Run it from the project directory:
 
 ```sh
-/Users/valerii/code/ledger/.venv/bin/python -m ledger.mcp_server
+uv run mcp_server
 ```
 
-or from anywhere inside the repo:
+or via the project venv's console script (an absolute path some clients
+prefer):
 
 ```sh
-uv run python -m ledger.mcp_server
+/Users/valerii/code/ledger/ledger/.venv/bin/mcp_server
 ```
 
-Register that command with an MCP client (editor, Claude Desktop, `mcp`
-CLI, …) as a *stdio* server — no ports, no daemon. Verify it end-to-end
-without a client:
+Register one of those commands with an MCP client (editor, Claude Desktop,
+`mcp` CLI, …) as a *stdio* server — no ports, no daemon. The client spawns
+the command fresh on every session and exchanges JSON-RPC over the pipes.
+`uv run mcp_server` resolves from the project root, so point the client's
+command at the `ledger/` directory if the client doesn't inherit one.
+Verify it end-to-end without a client:
 
 ```sh
 echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
-  | /Users/valerii/code/ledger/.venv/bin/python -m ledger.mcp_server
+  | uv run mcp_server
 # {"jsonrpc": "2.0", "id": 1, "result": {"tools": [{"name": "add_transaction", ...}, {"name": "list_accounts", ...}]}}
 ```
 
@@ -67,7 +71,7 @@ Execute `add_transaction` the same way — one JSON-RPC request per line:
 
 ```sh
 echo '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"add_transaction","arguments":{"date":"2026-08-19","narration":"Top up Wise","payee":"Mono","postings":[{"account":"Assets:Mono:EUR","number":"-150.00","currency":"EUR"},{"account":"Assets:Wise:EUR","elided":true}]}}}' \
-  | /Users/valerii/code/ledger/.venv/bin/python -m ledger.mcp_server
+  | uv run mcp_server
 ```
 
 The result echoes the rendered directive and, in `structuredContent`,
@@ -87,14 +91,52 @@ The registered tools:
   posting. Fails closed: a ledger with loader errors returns them
   instead of a partial list.
 
-Neither tool takes a path — both operate on the canonical ledger,
-hardcoded as `LEDGER_PATH` in `src/ledger/mcp_server.py`:
+Neither tool takes a path — both operate on the canonical ledger, taken
+from the required `LEDGER_PATH` environment variable
+(`src/ledger/globals.py`). The Docker compose files set it to the ledger
+file inside the synced repo checkout (see below).
 
-```python
-LEDGER_PATH = Path("/Users/valerii/code/finances/main.bean")
+### Docker client (reader + MCP over stdio)
+
+[`docker-compose.client.yml`](../docker-compose.client.yml) (prod,
+prebuilt images) and `docker-compose.client.dev.yml` (dev, local builds)
+pair a read-only `reader` (ledgerd `Dockerfile.reader`) that keeps a
+mirror of the finances repo on disk with a `ledger` service hosting the
+MCP server.
+
+The `ledger` service has **no baked command** — the image ships without a
+CMD, and stdio MCP means the user executes the server fresh on every
+session and hands the exec command to his chat client. The client sends
+JSON-RPC requests on the process's stdin and reads replies from stdout;
+nothing runs in the background.
+
+Keep the reader up as a daemon:
+
+```sh
+# prod (prebuilt images) / dev (local builds)
+docker compose -f docker-compose.client.yml up -d reader
+docker compose -f docker-compose.client.dev.yml up -d reader --build
 ```
 
-Point that constant at your ledger to change it.
+Then register the MCP server with the chat client — either host-side
+(from `ledger/`), or containerized over the reader's checkout
+(`./data/reader-repo`, `LEDGER_PATH=/data/main.bean`; `-T` keeps stdio a
+pipe, not a TTY):
+
+```sh
+# host-side — every session runs the command fresh
+uv run mcp_server
+# or absolute, cwd-independent
+/Users/valerii/code/ledger/ledger/.venv/bin/mcp_server
+
+# containerized — spawns a one-off ledger container (waits for the
+# reader's first fetch via service_healthy)
+docker compose -f /path/to/docker-compose.client.yml run --rm -T ledger uv run mcp_server
+```
+
+The reader never pushes; it hard-resets to `origin/$BRANCH` every
+`PULL_INTERVAL` and needs an SSH key with read access (see
+[ledgerd/README.md](../ledgerd/README.md)).
 
 ## Chat bridge
 
