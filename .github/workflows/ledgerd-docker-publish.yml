@@ -70,7 +70,6 @@ jobs:
           file: ledgerd/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          ssh: default
           add-hosts: |
             ssh.git.valerii.casa=172.18.0.5
           tags: |
