@@ -35,6 +35,18 @@ def test_create_server_registers_add_account():
     assert tool.definition.inputSchema["properties"]["booking"]["enum"]
 
 
+def test_create_server_registers_run_query():
+    async def build():
+        return create_server()
+
+    server = asyncio.run(build())
+    tool = server.tools.get("run_query")
+    assert tool is not None
+    assert tool.definition.name == "run_query"
+    assert set(tool.definition.inputSchema["required"]) == {"query"}
+    assert "offset" in tool.definition.inputSchema["properties"]
+
+
 def test_run_stdio_appends_transaction(scratch_ledger, monkeypatch):
     monkeypatch.setattr("ledger.mcp_server.LEDGER_PATH", scratch_ledger)
     call = {
@@ -442,6 +454,92 @@ def test_run_stdio_lists_balances(scratch_ledger, monkeypatch):
     assert balances["Assets:Cash"] == ["1000.00 USD"]
     assert balances["Assets:Broker"] == ["10 AAPL"]
     assert result["structuredContent"]["count"] == 7
+
+
+def test_run_stdio_runs_query(scratch_ledger, monkeypatch):
+    monkeypatch.setattr("ledger.mcp_server.LEDGER_PATH", scratch_ledger)
+    call = {
+        "jsonrpc": "2.0",
+        "id": 9,
+        "method": "tools/call",
+        "params": {
+            "name": "run_query",
+            "arguments": {
+                "query": (
+                    "SELECT account, sum(position) "
+                    "GROUP BY account ORDER BY account"
+                ),
+            },
+        },
+    }
+    stdout = io.StringIO()
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(call) + "\n"))
+    monkeypatch.setattr("sys.stdout", stdout)
+
+    run_stdio(create_server)
+
+    result = json.loads(stdout.getvalue().strip().splitlines()[0])["result"]
+    assert result["isError"] is False
+    content = result["structuredContent"]
+    assert content["columns"] == ["account", "sum(position)"]
+    assert any(row[0] == "Assets:Cash" for row in content["rows"])
+    assert content["truncated"] is False
+    assert "Assets:Cash" in result["content"][0]["text"]
+
+
+def test_run_stdio_query_invalid_bql(scratch_ledger, monkeypatch):
+    monkeypatch.setattr("ledger.mcp_server.LEDGER_PATH", scratch_ledger)
+    call = {
+        "jsonrpc": "2.0",
+        "id": 10,
+        "method": "tools/call",
+        "params": {
+            "name": "run_query",
+            "arguments": {"query": "SELECT nope FROM nowhere"},
+        },
+    }
+    stdout = io.StringIO()
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(call) + "\n"))
+    monkeypatch.setattr("sys.stdout", stdout)
+
+    run_stdio(create_server)
+
+    result = json.loads(stdout.getvalue().strip().splitlines()[0])["result"]
+    assert result["isError"] is True
+    assert result["structuredContent"]["error_type"] == "bql"
+    assert result["structuredContent"]["error"]
+
+
+def test_run_stdio_query_fails_closed_on_broken_ledger(tmp_path, monkeypatch):
+    """A ledger with loader errors returns them instead of query rows."""
+    ledger = tmp_path / "b.bean"
+    ledger.write_text(
+        'option "operating_currency" "USD"\n'
+        "2024-03-01 * \"Broken\"\n"
+        "  Assets:Nope  8.50 USD\n"
+        "  Assets:Nope  -8.50 USD\n"
+    )
+    monkeypatch.setattr("ledger.mcp_server.LEDGER_PATH", ledger)
+    call = {
+        "jsonrpc": "2.0",
+        "id": 11,
+        "method": "tools/call",
+        "params": {
+            "name": "run_query",
+            "arguments": {"query": "SELECT account GROUP BY account"},
+        },
+    }
+    stdout = io.StringIO()
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(call) + "\n"))
+    monkeypatch.setattr("sys.stdout", stdout)
+
+    run_stdio(create_server)
+
+    result = json.loads(stdout.getvalue().strip().splitlines()[0])["result"]
+    assert result["isError"] is True
+    assert result["structuredContent"]["error_type"] == "ledger"
+    assert result["structuredContent"]["rows"] == []
+    assert result["structuredContent"]["errors"]
 
 
 def test_run_stdio_lists_accounts_fails_closed_on_broken_ledger(tmp_path, monkeypatch):
