@@ -234,6 +234,28 @@ def test_create_server_registers_add_receipt():
     assert set(tool.definition.inputSchema["required"]) == {"date", "currency", "items"}
 
 
+def test_create_server_registers_get_receipts_by_ids():
+    async def build():
+        return create_server()
+
+    server = asyncio.run(build())
+    tool = server.tools.get("get_receipts_by_ids")
+    assert tool is not None
+    assert tool.definition.name == "get_receipts_by_ids"
+    assert set(tool.definition.inputSchema["required"]) == {"ids"}
+
+
+def test_create_server_registers_get_receipts_by_ids():
+    async def build():
+        return create_server()
+
+    server = asyncio.run(build())
+    tool = server.tools.get("get_receipts_by_ids")
+    assert tool is not None
+    assert tool.definition.name == "get_receipts_by_ids"
+    assert set(tool.definition.inputSchema["required"]) == {"ids"}
+
+
 def test_run_stdio_receipt_ids_land_in_meta(scratch_ledger, monkeypatch):
     monkeypatch.setattr("ledger.mcp_server.LEDGER_PATH", scratch_ledger)
     call = {
@@ -398,6 +420,81 @@ def test_run_stdio_add_receipt_fails_on_missing_required(tmp_path, monkeypatch):
     assert result["isError"] is True
     assert "add_receipt failed" in result["content"][0]["text"]
     assert not (tmp_path / "receipts").exists()  # nothing written
+
+
+def test_run_stdio_gets_receipts_by_ids(scratch_ledger, monkeypatch):
+    monkeypatch.setattr("ledger.mcp_server.LEDGER_PATH", scratch_ledger)
+    add = {
+        "jsonrpc": "2.0",
+        "id": 15,
+        "method": "tools/call",
+        "params": {
+            "name": "add_receipt",
+            "arguments": {
+                "date": "2026-08-21",
+                "currency": "EUR",
+                "store_name": "Cafe Gato",
+                "items": [{"name": "TIRAMISU", "amount": 6.0}],
+            },
+        },
+    }
+    stdout = io.StringIO()
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(add) + "\n"))
+    monkeypatch.setattr("sys.stdout", stdout)
+    run_stdio(create_server)
+    receipt_id = json.loads(stdout.getvalue().strip().splitlines()[0])["result"]["structuredContent"]["id"]
+
+    call = {
+        "jsonrpc": "2.0",
+        "id": 16,
+        "method": "tools/call",
+        "params": {
+            "name": "get_receipts_by_ids",
+            "arguments": {"ids": [receipt_id]},
+        },
+    }
+    stdout = io.StringIO()
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(call) + "\n"))
+    monkeypatch.setattr("sys.stdout", stdout)
+
+    run_stdio(create_server)
+
+    result = json.loads(stdout.getvalue().strip().splitlines()[0])["result"]
+    assert result["isError"] is False
+    content = result["structuredContent"]
+    assert content["count"] == 1
+    receipt = content["receipts"][0]
+    assert receipt["id"] == receipt_id
+    assert receipt["date"] == "2026-08-21"
+    assert receipt["currency"] == "EUR"
+    assert receipt["store_name"] == "Cafe Gato"
+    assert receipt["items"] == [{"name": "TIRAMISU", "name_inf": None, "qty": 1.0, "unit": "pcs", "amount": 6.0}]
+    assert receipt_id in result["content"][0]["text"]
+
+
+def test_run_stdio_get_receipts_by_ids_missing_fails(scratch_ledger, monkeypatch):
+    monkeypatch.setattr("ledger.mcp_server.LEDGER_PATH", scratch_ledger)
+    call = {
+        "jsonrpc": "2.0",
+        "id": 17,
+        "method": "tools/call",
+        "params": {
+            "name": "get_receipts_by_ids",
+            "arguments": {"ids": ["2026-08-21-53f7acbb", "2025-01-01-0011aabb"]},
+        },
+    }
+    stdout = io.StringIO()
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(call) + "\n"))
+    monkeypatch.setattr("sys.stdout", stdout)
+
+    run_stdio(create_server)
+
+    result = json.loads(stdout.getvalue().strip().splitlines()[0])["result"]
+    assert result["isError"] is True
+    text = result["content"][0]["text"]
+    assert "get_receipts_by_ids failed" in text
+    assert "2026-08-21-53f7acbb" in text
+    assert "2025-01-01-0011aabb" in text
 
 
 def test_run_stdio_lists_accounts(scratch_ledger, monkeypatch):

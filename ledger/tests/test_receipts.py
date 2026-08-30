@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from ledger import Receipt, ReceiptItem, add_receipt
+from ledger import Receipt, ReceiptItem, add_receipt, get_receipts_by_ids
 from ledger.layout import KIND_RECEIPT, resolve_target
 
 
@@ -154,3 +154,67 @@ def test_receipt_item_defaults_qty_and_optional_fields():
     assert item.qty == 1.0
     assert item.name_inf is None
     assert item.unit == "pcs"
+
+
+def test_get_receipts_by_ids_returns_objects(tmp_path):
+    ledger_file = tmp_path / "ledger.bean"
+    receipt_id = add_receipt(ledger_file, date(2026, 8, 21), _receipt())
+    got = get_receipts_by_ids(ledger_file, [receipt_id])
+    assert len(got) == 1
+    receipt = got[0]
+    assert receipt.id == receipt_id
+    assert receipt.date == date(2026, 8, 21)
+    assert receipt.currency == "EUR"
+    assert receipt.store_name == "Cafe Gato"
+    assert receipt.store_location == "Berlin"
+    assert receipt.items == [
+        ReceiptItem(name="CAPPUCINO", name_inf="cappuccino", qty=1.0, unit="pcs", amount=3.5)
+    ]
+
+
+def test_get_receipts_by_ids_preserves_request_order(tmp_path):
+    ledger_file = tmp_path / "ledger.bean"
+    first = add_receipt(ledger_file, date(2026, 8, 21), _receipt(items=[]))
+    second = add_receipt(ledger_file, date(2026, 8, 22), _receipt(items=[]))
+    got = get_receipts_by_ids(ledger_file, [second, first])
+    assert [r.id for r in got] == [second, first]
+
+
+def test_get_receipts_by_ids_across_years(tmp_path):
+    ledger_file = tmp_path / "ledger.bean"
+    id_2025 = add_receipt(ledger_file, date(2025, 12, 31), _receipt(items=[]))
+    id_2026 = add_receipt(ledger_file, date(2026, 1, 1), _receipt(items=[]))
+    got = get_receipts_by_ids(ledger_file, [id_2025, id_2026])
+    assert [r.id for r in got] == [id_2025, id_2026]
+    assert [r.date for r in got] == [date(2025, 12, 31), date(2026, 1, 1)]
+
+
+def test_get_receipts_by_ids_missing_one_fails(tmp_path):
+    ledger_file = tmp_path / "ledger.bean"
+    found = add_receipt(ledger_file, date(2026, 8, 21), _receipt(items=[]))
+    missing = "2026-08-21-deadbeef"
+    with pytest.raises(LookupError, match=re.escape(missing)) as exc:
+        get_receipts_by_ids(ledger_file, [found, missing])
+    assert found not in str(exc.value)
+    assert "receipts not found:" in str(exc.value)
+
+
+def test_get_receipts_by_ids_missing_all_lists_each_id(tmp_path):
+    ledger_file = tmp_path / "ledger.bean"
+    a = "2026-08-21-aaaaaaaa"
+    b = "2025-01-01-bbbbbbbb"
+    with pytest.raises(LookupError, match=rf"{re.escape(a)}, {re.escape(b)}"):
+        get_receipts_by_ids(ledger_file, [a, b])
+
+
+def test_get_receipts_by_ids_malformed_id_is_not_found(tmp_path):
+    ledger_file = tmp_path / "ledger.bean"
+    add_receipt(ledger_file, date(2026, 8, 21), _receipt(items=[]))
+    with pytest.raises(LookupError, match="not-an-id"):
+        get_receipts_by_ids(ledger_file, ["not-an-id"])
+
+
+def test_get_receipts_by_ids_empty_ids_rejected(tmp_path):
+    ledger_file = tmp_path / "ledger.bean"
+    with pytest.raises(ValueError, match="ids must not be empty"):
+        get_receipts_by_ids(ledger_file, [])

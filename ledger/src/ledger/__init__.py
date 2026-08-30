@@ -11,7 +11,7 @@ Pure Python bindings — no filesystem watcher.
   directives     — build and append the remaining directive types
       (balance, pad, note, document, price, event, query, custom).
   receipts       — structured purchase records archived in
-      ``receipts/<YEAR>.jsonl`` (``Receipt`` model + ``add_receipt``).
+      ``receipts/<YEAR>.jsonl`` (``Receipt`` model, ``add_receipt``, ``get_receipts_by_ids``).
   recurring     — recurring payment rules in ``recurring.json`` (store
       CRUD + lazy hourly settlement via ``recurring_check``).
 *  queries        — basic BQL query helpers (orientation, paging, tables,
@@ -80,7 +80,7 @@ from .transactions import (
     make_posting,
     make_transaction,
 )
-from .receipts import Receipt, ReceiptItem, add_receipt
+from .receipts import Receipt, ReceiptItem, add_receipt, get_receipts_by_ids
 from .directives import (
     add_balance,
     add_custom,
@@ -217,6 +217,7 @@ __all__ = [
     "format_price",
     "format_query",
     "format_transaction",
+    "get_receipts_by_ids",
     "ledger_info",
     "list_accounts",
     "list_balances",
