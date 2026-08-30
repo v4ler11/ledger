@@ -9,7 +9,7 @@ anything is written (and hands back the ``include`` line needed to make
 a brand-new yearly file reachable from the root).
 """
 
-import glob, os, re, shutil, tempfile
+import fnmatch, glob, os, re, shutil, tempfile
 from datetime import date as _date
 from pathlib import Path
 from typing import List, Optional, Tuple, Union
@@ -165,5 +165,13 @@ def _required_include(root: Path, target: Path) -> Optional[str]:
             if not os.path.isabs(pattern):
                 pattern = str(base / pattern)
             if any(Path(p).resolve() == target.resolve() for p in glob.glob(pattern)):
+                return None
+            # a glob may cover a file that does not exist yet; appending a
+            # literal include for it would load it twice and beancount
+            # rejects the duplicate
+            if (
+                any(ch in pattern for ch in ("*", "?", "["))
+                and fnmatch.fnmatch(os.fspath(target), os.path.normpath(pattern))
+            ):
                 return None
     return f'include "{target.relative_to(base)}"\n'

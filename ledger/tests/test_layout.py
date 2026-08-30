@@ -190,6 +190,39 @@ def test_second_add_to_new_year_does_not_duplicate_include(finance):
     ) == 1
 
 
+def test_new_year_covered_by_glob_include_gets_no_literal_duplicate(finance):
+    base = finance.parent
+    # root loads yearly files via an include glob instead of literals
+    (base / "main.beancount").write_text(
+        'option "title" "Personal Ledger"\n'
+        'option "operating_currency" "EUR"\n\n'
+        'include "commodities.beancount"\n'
+        'include "accounts.beancount"\n'
+        'include "ledgers/*.beancount"\n'
+    )
+    _, errors = add_transaction(
+        finance,
+        date(2027, 2, 1),
+        "Future",
+        [("Expenses:Food", "8.50", "EUR"), ("Assets:Cash", None)],
+    )
+    assert errors == []
+    year = base / "ledgers" / "2027.beancount"
+    assert year.exists()
+    assert '2027-02-01 * "Future"' in year.read_text()
+    # the glob already loads the new file; a literal include would make
+    # beancount parse it twice and fail
+    assert 'include "ledgers/2027.beancount"' not in finance.read_text()
+    # ledger stays valid for further adds to the same year
+    _, errors = add_transaction(
+        finance,
+        date(2027, 3, 1),
+        "More",
+        [("Expenses:Food", "3.00", "EUR"), ("Assets:Cash", None)],
+    )
+    assert errors == []
+
+
 def test_other_dated_directives_route_to_year_file(finance):
     _, errors = add_note(finance, date(2026, 6, 2), "Assets:Cash", "called")
     assert errors == []
