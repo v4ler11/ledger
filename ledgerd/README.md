@@ -1,87 +1,63 @@
 # ledgerd
 
-Single-writer / many-readers git sync of ledger files (`.bean`, `.jsonl`).
+Single-writer git sync of ledger files (`.bean`, `.jsonl`).
 
-- **Writer** (`writer.py`, `Dockerfile.writer`): in the container the only
-  container allowed to push. Every hour at `MM=59` it commits changes to
-  `FILE_PATTERNS` as `<dd-mm-yyyy>-<hh>`. Every day at `23:59` it squashes
-  each day's pending commits — including leftovers from previous days, e.g.
-  `01-01-2026-01` + `01-01-2026-02` → `01-01-2026` — into a single
-  `<dd-mm-yyyy>` commit and force-pushes with lease.
-- **Reader** (`reader.sh`, `Dockerfile.reader`): read-only mirror. Fetches
-  every `PULL_INTERVAL` seconds (default 5 min) and hard-resets the working
-  tree to `origin/$BRANCH`, so the writer's daily rewrites are followed
-  without conflict. Never pushes. Uncommitted local changes are destroyed
-  (never stashed) by the reset, and unreadable fetch errors are logged with
-  the underlying git/ssh diagnostic.
-- Both containers take a `flock` on `<REPO_DIR>/.ledgerd.lock`; a second
-  instance on the same `REPO_DIR` exits rather than racing. Intended
-  deployment gives each container its own volume (they share `REPO_URL`,
-  never a `REPO_DIR`); a writer and reader on one volume is a
-  misconfiguration that the lock surfaces at startup.
+- **Writer** (`writer.py`, `Dockerfile`): the only container allowed to push.
+  Every hour at `MM=59` it commits changes to `FILE_PATTERNS` as
+  `<dd-mm-yyyy>-<hh>`. Every day at `23:59` it squashes each day's pending
+  commits — including leftovers from previous days, e.g. `01-01-2026-01` +
+  `01-01-2026-02` → `01-01-2026` — into a single `<dd-mm-yyyy>` commit and
+  force-pushes with lease.
+
+The writer takes a `flock` on `<REPO_DIR>/.ledgerd.lock`; a second instance
+on the same `REPO_DIR` exits rather than racing. Run exactly one writer per
+repo, each with its own volume.
 
 ## Requirements
 
 - Private repo reachable over SSH (e.g. Gitea/GitHub).
-- SSH private key — default `~/.ssh/id_rsa` — allowed to push (writer) or
-  read (reader). Mounted read-only into the container; both entrypoints copy
-  it to a writable in-container path with mode `0600` at startup, so loose
-  host-file permissions (e.g. `644`) never trigger OpenSSH's
-  "UNPROTECTED PRIVATE KEY FILE" refusal.
+- SSH private key — default `~/.ssh/id_rsa` — allowed to push. Mounted
+  read-only into the container; the entrypoint copies it to a writable
+  in-container path with mode `0600` at startup, so loose host-file
+  permissions (e.g. `644`) never trigger OpenSSH's "UNPROTECTED PRIVATE KEY
+  FILE" refusal.
 - `TZ` matching your local time so the 23:59 day boundary aligns.
 
 ## Writer
 
 ```sh
-docker build -f Dockerfile.writer -t ledgerd-writer .
-docker run -d --name ledgerd-writer --restart unless-stopped \
+docker build -t ledgerd .
+docker run -d --name ledgerd --restart unless-stopped \
   -e REPO_URL=ssh://git@ssh.git.valerii.casa/valerii/finances.git \
   -e TZ=Europe/Kyiv \
   -v ~/.ssh/id_rsa:/root/.ssh/id_rsa:ro \
   -v "$PWD":/repo \
-  ledgerd-writer
+  ledgerd
 ```
-
-Run exactly one writer per repo.
-
-## Reader
-
-```sh
-docker build -f Dockerfile.reader -t ledgerd-reader .
-docker run -d --name ledgerd-reader --restart unless-stopped \
-  -e REPO_URL=ssh://git@ssh.git.valerii.casa/valerii/finances.git \
-  -e TZ=Europe/Kyiv \
-  -v ~/.ssh/id_rsa:/root/.ssh/id_rsa:ro \
-  -v "$PWD":/repo \
-  ledgerd-reader
-```
-
-Run as many readers as you like.
 
 ## Environment variables
 
-| Variable | Default | Writer | Reader |
-|---|---|---|---|
-| `REPO_URL` | — (required) | ✓ | ✓ |
-| `BRANCH` | `main` | ✓ | ✓ |
-| `REPO_DIR` | `/repo` | ✓ | ✓ |
-| `SSH_KEY_PATH` | `/root/.ssh/id_rsa` | ✓ | ✓ |
-| `SSH_KNOWN_HOSTS` | `/root/.ssh/known_hosts` | ✓ | ✓ |
-| `FILE_PATTERNS` | `*.bean *.jsonl` | ✓ | — |
-| `GIT_NAME` / `GIT_EMAIL` | `Finances Writer` / `writer@finances.local` | ✓ | — |
-| `PUSH_RETRIES` | `5` | ✓ | — |
-| `PUSH_RETRY_SLEEP` | `30` | ✓ | — |
-| `TICK_SLEEP` | `30` | ✓ | — |
-| `PULL_INTERVAL` | `300` | — | ✓ |
+| Variable | Default | Writer |
+|---|---|---|
+| `REPO_URL` | — (required) | ✓ |
+| `BRANCH` | `main` | ✓ |
+| `REPO_DIR` | `/repo` | ✓ |
+| `SSH_KEY_PATH` | `/root/.ssh/id_rsa` | ✓ |
+| `SSH_KNOWN_HOSTS` | `/root/.ssh/known_hosts` | ✓ |
+| `FILE_PATTERNS` | `*.bean *.jsonl` | ✓ |
+| `GIT_NAME` / `GIT_EMAIL` | `Finances Writer` / `writer@finances.local` | ✓ |
+| `PUSH_RETRIES` | `5` | ✓ |
+| `PUSH_RETRY_SLEEP` | `30` | ✓ |
+| `TICK_SLEEP` | `30` | ✓ |
 
 First SSH connection accepts the host key (`StrictHostKeyChecking=accept-new`)
 into `$SSH_KNOWN_HOSTS`, so an empty mounted file works for bootstrapping.
 
-Both images ship a `HEALTHCHECK`: each successful reader fetch / writer tick
-touches `<REPO_DIR>/.ledgerd.health`, and the probe fails when that stamp is
-older than `2 * PULL_INTERVAL` (reader) / `2 * TICK_SLEEP` (writer) plus 90s,
-so `docker ps`/monitoring shows `unhealthy` when a container stops making
-progress (e.g. stuck on a bad key or network).
+The image ships a `HEALTHCHECK`: each successful writer tick touches
+`<REPO_DIR>/.ledgerd.health`, and the probe fails when that stamp is older
+than `2 * TICK_SLEEP` plus 90s, so `docker ps`/monitoring shows `unhealthy`
+when the container stops making progress (e.g. stuck on a bad key or
+network).
 
 ## Limits
 

@@ -1,7 +1,7 @@
 [project]
 name = "ledgerd"
 version = "0.1.1"
-description = "Single-writer / multi-reader git sync of ledger files with daily squashed commits"
+description = "Single-writer git sync of ledger files with daily squashed commits"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = []

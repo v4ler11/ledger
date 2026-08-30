@@ -130,14 +130,14 @@ def ensure_branch() -> None:
 
 
 def acquire_lock() -> None:
-    # One ledgerd process (writer or reader) per REPO_DIR; readers flock the
-    # same file. Intended deployment gives each container its own volume, so
-    # contention means misconfiguration -- fail fast instead of racing.
+    # One ledgerd process per REPO_DIR (the flock would also cover a second
+    # writer); contention means misconfiguration -- fail fast instead of
+    # racing.
     fd = open(os.path.join(REPO_DIR, ".ledgerd.lock"), "w")
     try:
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:
-        sys.exit("another ledgerd-writer already holds the lock on this REPO_DIR")
+        sys.exit("another ledgerd instance already holds the lock on this REPO_DIR")
     global LOCK_FD
     LOCK_FD = fd
 

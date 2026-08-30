@@ -40,26 +40,13 @@ jobs:
     permissions:
       contents: read
       packages: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - dockerfile: Dockerfile.writer
-            image_name: ledgerd-writer
-          - dockerfile: Dockerfile.reader
-            image_name: ledgerd-reader
     env:
-      IMAGE_NAME: ${{ github.repository_owner }}/${{ matrix.image_name }}
+      IMAGE_NAME: ${{ github.repository_owner }}/ledgerd
       TAG_VERSION: ${{ needs.verify.outputs.tag_version }}
       MAJOR: ${{ needs.verify.outputs.major }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Set up SSH for private dependencies
-        uses: ./.github/actions/setup-ssh-private
-        with:
-          ssh_private_key: ${{ secrets.SSH_PRIVATE_KEY }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -76,11 +63,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUBTOKEN }}
 
-      - name: Build and push ${{ matrix.dockerfile }}
+      - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: ./ledgerd
-          file: ledgerd/${{ matrix.dockerfile }}
+          file: ledgerd/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
           ssh: default

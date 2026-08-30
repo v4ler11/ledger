@@ -1,15 +1,15 @@
-# ledgerd writer: commits *.bean/*.jsonl changes hourly (as
+# ledgerd: commits *.bean/*.jsonl changes hourly (as
 # "<dd-mm-yyyy>-<hh>"), squashes each day into one "<dd-mm-yyyy>" commit
 # at 23:59 (including leftover hourly commits from previous days), and
 # pushes to the private repo over SSH.
 #
-# Build:   docker build -f Dockerfile.writer -t ledgerd-writer .
-# Run:     docker run -d --name ledgerd-writer --restart unless-stopped \
+# Build:   docker build -t ledgerd .
+# Run:     docker run -d --name ledgerd --restart unless-stopped \
 #            -e REPO_URL=ssh://git@ssh.git.valerii.casa/valerii/finances.git \
 #            -e TZ=Europe/Kyiv \
 #            -v ~/.ssh/id_rsa:/root/.ssh/id_rsa:ro \
 #            -v "$PWD":/repo \
-#            ledgerd-writer
+#            ledgerd
 #
 # Notes:
 #   * Mount ~/.ssh/id_rsa read-only; the key must be allowed to push.

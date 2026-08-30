@@ -4,7 +4,7 @@ Monorepo with two projects side by side, each with its own full git history
 (the merge commit `f4bfaf6`; `HEAD^2` = ledgerd's original `master`):
 
 - `ledger/` — beancount v3 query/edit utilities, MCP server, Telegram bot
-- `ledgerd/` — single-writer / multi-reader git sync of ledger files
+- `ledgerd/` — single-writer git sync of ledger files
 - `.github/` — CI at the repo root (GitHub only scans root workflows)
 
 ## Development
@@ -31,11 +31,10 @@ Zero dependencies (`dependencies = []`). Syntax check:
 ```sh
 cd ledgerd
 python3 -m py_compile writer.py
-bash -n reader.sh
 ```
 
 Real runs need a `REPO_DIR`, an SSH key and a git remote — use the
-Dockerfiles (`Dockerfile.writer`, `Dockerfile.reader`) instead.
+`Dockerfile` instead.
 
 ## Versioning and releases
 
@@ -46,7 +45,7 @@ publish workflow triggers only on its own prefix:
 | Git tag | Workflow | Images pushed to `git.valerii.casa` |
 |---|---|---|
 | `ledger-vX.Y.Z` | `ledger-docker-publish` | `valerii/ledger:vX`, `:vX.Y.Z`, `:latest` |
-| `ledgerd-vX.Y.Z` | `ledgerd-docker-publish` | `valerii/ledgerd-writer` and `valerii/ledgerd-reader` — each `vX`, `vX.Y.Z`, `latest` |
+| `ledgerd-vX.Y.Z` | `ledgerd-docker-publish` | `valerii/ledgerd:vX`, `:vX.Y.Z`, `:latest` |
 
 Rules:
 
@@ -75,11 +74,10 @@ Build notes:
   private deps through BuildKit SSH forwarding: the workflow loads
   `secrets.SSH_PRIVATE_KEY` into an agent and passes `ssh: default`
   (`Dockerfile` uses `RUN --mount=type=ssh`).
-- ledgerd builds both images in one matrix job: `Dockerfile.writer` →
-  `ledgerd-writer`, `Dockerfile.reader` → `ledgerd-reader`. No SSH needed
-  (zero deps).
+- ledgerd builds one image per tag push: `Dockerfile` → `ledgerd`. No SSH
+  needed (zero deps).
 - Registry login: `${{ github.actor }}` + `secrets.GITHUBTOKEN`; build cache
   reads/writes the `:latest` image (inline).
 - Local builds: `docker compose -f ledger/docker-compose.tg.yaml up`
   (context `./ledger`, SSH from your local `~/.ssh`);
-  `docker build -f ledgerd/Dockerfile.writer -t ledgerd-writer ledgerd/`.
+  `docker build -t ledgerd ledgerd/`.
