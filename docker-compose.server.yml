@@ -27,7 +27,7 @@ services:
 
   ledger:
     image: git.valerii.casa/valerii/ledger:latest
-    command: ["uv", "run", "tg_server"]
+    command: ["uv", "run", "serve", "tg", "mcp"]
     depends_on:
       writer:
         condition: service_healthy

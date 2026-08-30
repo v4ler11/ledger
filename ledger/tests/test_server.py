@@ -473,3 +473,39 @@ def test_run_stdio_lists_accounts_fails_closed_on_broken_ledger(tmp_path, monkey
     assert result["isError"] is True
     assert result["structuredContent"]["accounts"] == []
     assert result["structuredContent"]["errors"]
+
+
+def test_create_app_serves_mcp_session():
+    """/mcp accepts initialize over HTTP and creates a session."""
+    from fastapi.testclient import TestClient
+
+    from ledger.mcp_server import create_app
+
+    async def build():
+        return create_app()
+
+    app = asyncio.run(build())
+    init = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2025-11-25",
+            "capabilities": {},
+            "clientInfo": {"name": "test", "version": "0"},
+        },
+    }
+
+    with TestClient(app) as client:
+        r = client.post(
+            "/mcp",
+            headers={"content-type": "application/json"},
+            json=init,
+        )
+        assert r.status_code == 200
+        session_id = r.headers["mcp-session-id"]
+        assert session_id
+        assert r.json()["result"]["protocolVersion"] == "2025-11-25"
+
+        gone = client.delete("/mcp", headers={"mcp-session-id": session_id})
+        assert gone.status_code == 200

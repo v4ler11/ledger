@@ -18,8 +18,11 @@ Pure Python bindings — no filesystem watcher.
      accounts, balances, commodities, prices) returning pydantic models.
   tools          — chat-library bridge: the ledger MCP tools adapted to the
       chat ``Tool`` protocol; definitions stay in ``mcp_server``.
-  mcp_server     — stdio MCP server exposing the write bindings as tools
-      (imported lazily; run with ``python -m ledger.mcp_server``).
+  mcp_server     — MCP server module with two transports: stdio JSON-RPC
+      (``mcp_stdio``) and an HTTP/SSE server (``mcp_server``); imported
+      lazily; run with ``python -m ledger.mcp_server``.
+  main           — ``uv run serve`` entry point: runs the ``tg`` bot
+      and/or ``mcp`` server, side by side on one event loop.
 """
 
 from .ledger import (

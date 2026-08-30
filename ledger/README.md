@@ -18,9 +18,10 @@ The library has four parts:
 - **Query helpers** (`ledger/queries.py`) — basic BQL helpers that
   return [pydantic](https://docs.pydantic.dev/) models: orientation,
   paged `run_query`, tables, accounts, commodities, and prices.
-- **MCP server** (`ledger/mcp_server.py`) — a stdio JSON-RPC server that
-  exposes the write and read bindings to an MCP client; `add_transaction`
-  and `list_accounts`.
+- **MCP server** (`ledger/mcp_server.py`) — an MCP server with two
+  transports: stdio JSON-RPC over pipes (`mcp_stdio`) and an HTTP/SSE
+  server (`mcp_server`); both expose the write and read bindings to an
+  MCP client; `add_transaction` and `list_accounts`.
 - **Chat bridge** (`ledger/tools.py`) — adapts the same tools to the
   `chat` library's `Tool` protocol, so one set of definitions drives both
   MCP and an OpenAI-style chat loop (see [Chat bridge](#chat-bridge)).
@@ -39,31 +40,37 @@ Requires Python ≥ 3.13. Dependencies: `beancount>=3.2.3` and
 
 ## MCP server
 
-`ledger/mcp_server.py` is an MCP server speaking JSON-RPC 2.0 over stdio: it
-reads one request per line on stdin and answers on stdout, so any MCP
-client can launch it as a subprocess. Run it from the project directory:
+`ledger/mcp_server.py` exposes the ledger bindings through MCP with two
+transports — stdio for clients that spawn a subprocess, HTTP/SSE for
+remote clients.
+
+### Stdio
+
+The stdio server speaks JSON-RPC 2.0: it reads one request per line on
+stdin and answers on stdout, so any MCP client can launch it as a
+subprocess. Run it from the project directory:
 
 ```sh
-uv run mcp_server
+uv run mcp_stdio
 ```
 
 or via the project venv's console script (an absolute path some clients
 prefer):
 
 ```sh
-/Users/valerii/code/ledger/ledger/.venv/bin/mcp_server
+/Users/valerii/code/ledger/ledger/.venv/bin/mcp_stdio
 ```
 
 Register one of those commands with an MCP client (editor, Claude Desktop,
 `mcp` CLI, …) as a *stdio* server — no ports, no daemon. The client spawns
 the command fresh on every session and exchanges JSON-RPC over the pipes.
-`uv run mcp_server` resolves from the project root, so point the client's
+`uv run mcp_stdio` resolves from the project root, so point the client's
 command at the `ledger/` directory if the client doesn't inherit one.
 Verify it end-to-end without a client:
 
 ```sh
 echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
-  | uv run mcp_server
+  | uv run mcp_stdio
 # {"jsonrpc": "2.0", "id": 1, "result": {"tools": [{"name": "add_transaction", ...}, {"name": "list_accounts", ...}]}}
 ```
 
@@ -71,7 +78,7 @@ Execute `add_transaction` the same way — one JSON-RPC request per line:
 
 ```sh
 echo '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"add_transaction","arguments":{"date":"2026-08-19","narration":"Top up Wise","payee":"Mono","postings":[{"account":"Assets:Mono:EUR","number":"-150.00","currency":"EUR"},{"account":"Assets:Wise:EUR","elided":true}]}}}' \
-  | uv run mcp_server
+  | uv run mcp_stdio
 ```
 
 The result echoes the rendered directive and, in `structuredContent`,
@@ -96,6 +103,46 @@ from the required `LEDGER_PATH` environment variable
 (`src/ledger/globals.py`). The Docker compose files set it to the ledger
 file inside the synced repo checkout (see below).
 
+### HTTP/SSE
+
+The HTTP entry point serves the same MCP server over a single endpoint:
+
+```sh
+uv run mcp_server
+# MCP endpoint: http://127.0.0.1:8000/mcp
+```
+
+Host and port come from `LEDGER_MCP_HOST` / `LEDGER_MCP_PORT` (defaults
+`127.0.0.1:8000`). The transport is session-based: `GET /mcp` opens an
+SSE stream and returns an `Mcp-Session-Id` header, `POST /mcp` sends
+JSON-RPC requests to that session (202; replies arrive on the stream),
+`DELETE /mcp` closes it. Initialize a server with curl:
+
+```sh
+curl -s -X POST http://127.0.0.1:8000/mcp \
+  -H 'Content-Type: application/json' -H 'Mcp-Session-Id: demo' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"curl","version":"0"}}}'
+# {"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-11-25","capabilities":{...}}}
+```
+
+MCP clients speaking the SSE transport can point at the endpoint with
+their session id in the `Mcp-Session-Id` header.
+
+### Combined entry point (`uv run serve`)
+
+`uv run serve` runs the Telegram bot and/or the MCP HTTP/SSE server in
+one process. Pass at least one of `tg`, `mcp`; with both they share an
+event loop side by side and the process stops as soon as either service
+exits or fails:
+
+```sh
+uv run serve tg          # Telegram bot only
+uv run serve mcp         # MCP HTTP/SSE server only
+uv run serve tg mcp      # both, side by side
+```
+
+`serve` with no arguments exits with an error (`ledger/main.py`).
+
 ### Docker client (reader + MCP over stdio)
 
 [`docker-compose.client.yml`](../docker-compose.client.yml) (prod,
@@ -110,7 +157,7 @@ host-side exec, run every time (see [MCP server](#mcp-server)):
 ```sh
 docker compose -f docker-compose.client.yml up -d reader
 # chat client command (from ledger/):
-uv run mcp_server
+uv run mcp_stdio
 ```
 
 Point `LEDGER_PATH` at the ledger file — e.g. the reader's checkout
