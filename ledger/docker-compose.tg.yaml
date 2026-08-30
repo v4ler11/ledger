@@ -2,7 +2,7 @@ services:
   tg-bot:
     build:
       context: ./ledger
-      dockerfile: Dockerfile.tg
+      dockerfile: Dockerfile
       ssh:
         - default
     command: ["uv", "run", "tg_server"]

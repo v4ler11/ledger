@@ -22,5 +22,3 @@ ENV UV_COMPILE_BYTECODE=1 \
     GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=accept-new"
 
 RUN --mount=type=ssh uv sync --frozen --no-dev
-
-CMD ["uv", "run", "tg_server"]
