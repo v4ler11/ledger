@@ -1,6 +1,6 @@
 [project]
 name = "ledgerd"
-version = "0.1.3"
+version = "0.1.4"
 description = "Single-writer git sync of ledger files with daily squashed commits"
 readme = "README.md"
 requires-python = ">=3.12"

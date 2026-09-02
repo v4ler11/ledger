@@ -35,13 +35,6 @@ ENV REPO_DIR=/repo \
     BRANCH=main \
     FILE_PATTERNS="*.bean *.jsonl" \
     SSH_KEY_PATH=/root/.ssh/id_rsa \
-    PUSH_RETRIES=5 \
-    PUSH_RETRY_SLEEP=30 \
     TICK_SLEEP=30
-
-# Unhealthy when no loop tick has completed within 2*TICK_SLEEP + 90s
-# (the writer touches .ledgerd.health at the end of every tick).
-HEALTHCHECK --interval=1m --timeout=10s --start-period=30s --retries=3 \
-  CMD test "$(( $(date +%s) - $(stat -c %Y "$REPO_DIR/.ledgerd.health" 2>/dev/null || echo 0) ))" -lt $(( TICK_SLEEP * 2 + 90 ))
 
 ENTRYPOINT ["/usr/local/bin/writer.py"]

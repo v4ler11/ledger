@@ -15,8 +15,7 @@ services:
     image: git.valerii.casa/valerii/ledger:latest
     command: ["uv", "run", "serve", "tg", "mcp"]
     depends_on:
-      ledgerd:
-        condition: service_healthy
+      - ledgerd
     expose:
       - ${LEDGER_MCP_PORT:-8000}
     environment:
