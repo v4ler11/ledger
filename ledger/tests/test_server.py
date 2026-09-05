@@ -245,17 +245,6 @@ def test_create_server_registers_get_receipts_by_ids():
     assert set(tool.definition.inputSchema["required"]) == {"ids"}
 
 
-def test_create_server_registers_get_receipts_by_ids():
-    async def build():
-        return create_server()
-
-    server = asyncio.run(build())
-    tool = server.tools.get("get_receipts_by_ids")
-    assert tool is not None
-    assert tool.definition.name == "get_receipts_by_ids"
-    assert set(tool.definition.inputSchema["required"]) == {"ids"}
-
-
 def test_run_stdio_receipt_ids_land_in_meta(scratch_ledger, monkeypatch):
     monkeypatch.setattr("ledger.mcp_server.LEDGER_PATH", scratch_ledger)
     call = {
