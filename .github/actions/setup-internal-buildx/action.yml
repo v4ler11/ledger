@@ -1,9 +1,7 @@
 name: Set up Docker Buildx for internal registry
 description: >-
-  Configures buildx so buildkitd runs on the forgejo_forgejo network and
-  treats 172.18.0.5:3000 (internal Forgejo registry, plain HTTP) as an
-  insecure registry. Required because buildkitd does not inherit the
-  Docker daemon's insecure-registries config.
+  Configures buildx so buildkitd runs on the forgejo_forgejo network and can
+  reach the Forgejo registry at git.valerii.casa (HTTPS).
 runs:
   using: composite
   steps:
@@ -12,7 +10,3 @@ runs:
       with:
         driver-opts: |
           network=forgejo_forgejo
-        buildkitd-config-inline: |
-          [registry."172.18.0.5:3000"]
-            http = true
-            insecure = true

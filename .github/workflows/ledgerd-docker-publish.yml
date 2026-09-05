@@ -6,7 +6,7 @@ on:
       - 'ledgerd-v*'
 
 env:
-  REGISTRY: 172.18.0.5:3000
+  REGISTRY: git.valerii.casa
 
 jobs:
   verify:
@@ -71,7 +71,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           add-hosts: |
-            ssh.git.valerii.casa=172.18.0.5
+            git.valerii.casa=host-gateway
+            ssh.git.valerii.casa=host-gateway
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:v${{ env.MAJOR }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:v${{ env.TAG_VERSION }}
