@@ -70,9 +70,6 @@ jobs:
           file: ledgerd/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          add-hosts: |
-            git.valerii.casa=host-gateway
-            ssh.git.valerii.casa=host-gateway
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:v${{ env.MAJOR }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:v${{ env.TAG_VERSION }}
